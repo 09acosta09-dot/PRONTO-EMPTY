@@ -5,7 +5,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Con
 # ----------------------
 # CONFIGURACIÓN
 # ----------------------
-TOKEN = 7668998247:AAGR7gxbJSfF-yuWtIOxMEFI1AYFinMJygg   # ← reemplaza esto con tu token real
+TOKEN = "7668998247:AAGR7gxbJ5FF-yuWtIOxMEFl1AYFinMJygg"
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
