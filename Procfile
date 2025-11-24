@@ -1,1 +1,1 @@
-echo "PRONTO ready"
+worker: python3 main.py
