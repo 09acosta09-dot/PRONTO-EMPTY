@@ -285,6 +285,54 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "Usuario":
         await update.message.reply_text("Menú Usuario 👤", reply_markup=user_keyboard)
         return
+        # ---------------- TAXI FLOW ----------------
+if text == "🚕 Pedir taxi":
+    context.user_data["servicio"] = "taxi_origen"
+    await update.message.reply_text("📍 Envíame tu ubicación o escríbela:")
+    return
+# ORIGEN
+if context.user_data.get("servicio") == "taxi_origen":
+    context.user_data["origen"] = text
+    context.user_data["servicio"] = "taxi_destino"
+    await update.message.reply_text("🎯 Ahora dime tu *destino*:")
+    return
+# DESTINO
+if context.user_data.get("servicio") == "taxi_destino":
+    context.user_data["destino"] = text
+    context.user_data["servicio"] = "taxi_referencia"
+    await update.message.reply_text("🗒️ ¿Alguna referencia adicional?")
+    return
+# REFERENCIA Y ENVÍO
+if context.user_data.get("servicio") == "taxi_referencia":
+    referencia = text
+    origen = context.user_data.get("origen")
+    destino = context.user_data.get("destino")
+    nombre = update.effective_user.first_name or "Cliente"
+    hora = datetime.now().strftime("%I:%M %p")
+
+    msg = (
+        "🚕 *NUEVO SERVICIO DE TAXI* 🚕\n\n"
+        f"📍 *Origen:* {origen}\n"
+        f"🎯 *Destino:* {destino}\n"
+        f"🗒️ *Referencia:* {referencia}\n\n"
+        f"👤 *Cliente:* {nombre}\n"
+        f"⏰ *Hora:* {hora}"
+    )
+
+    await context.bot.send_message(
+        chat_id=CHANNEL_TAXI,
+        text=msg,
+        parse_mode="Markdown",
+    )
+
+    await update.message.reply_text(
+        "✔️ Tu solicitud fue enviada, un móvil te contactará pronto 💛",
+        reply_markup=user_keyboard
+    )
+
+    context.user_data.clear()
+    return
+
 
     # ---------------- MÓVIL ----------------
     if text == "Móvil":
