@@ -142,14 +142,7 @@ admin_keyboard = ReplyKeyboardMarkup(
 # ----------------------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Limpia cualquier estado atrapado
-    context.user_data.clear()
-
-    await update.message.reply_text(
-        "Hola 💛, soy PRONTO.\nElige una opción:",
-        reply_markup=main_keyboard
-    )
-
+    await update.message.reply_text("Hola 💛, soy PRONTO.\nElige una opción:", reply_markup=main_keyboard)
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
@@ -333,7 +326,65 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         await update.message.reply_text(
-            "✔️ Tu solicitud fue enviada, un móvil te contactará pronto 💛",
+            "✔️ Tu solicitud fue enviada
+
+    # ----------------- SERVICIO DOMICILIOS -----------------
+    if text == "📦 Pedir domicilio":
+        context.user_data["servicio"] = "domicilio_origen"
+        await update.message.reply_text("📍 Envíame tu ubicación o escríbela:")
+        return
+
+    if context.user_data.get("servicio") == "domicilio_origen":
+        context.user_data["origen"] = text
+        context.user_data["servicio"] = "domicilio_pedido"
+        await update.message.reply_text("📦 ¿Qué deseas enviar o pedir? (Ej: almuerzo, documento, mercado)")
+        return
+
+    if context.user_data.get("servicio") == "domicilio_pedido":
+        context.user_data["pedido"] = text
+        context.user_data["servicio"] = "domicilio_destino"
+        await update.message.reply_text("🎯 ¿Cuál es el destino?")
+        return
+
+    if context.user_data.get("servicio") == "domicilio_destino":
+        context.user_data["destino"] = text
+        context.user_data["servicio"] = "domicilio_referencia"
+        await update.message.reply_text("🗒️ ¿Alguna referencia adicional?")
+        return
+
+    if context.user_data.get("servicio") == "domicilio_referencia":
+        referencia = text
+        origen = context.user_data.get("origen")
+        pedido = context.user_data.get("pedido")
+        destino = context.user_data.get("destino")
+        nombre = update.effective_user.first_name or "Cliente"
+        hora = datetime.now().strftime("%I:%M %p")
+
+        msg = (
+            "📦 *NUEVO SERVICIO DE DOMICILIO* 📦\n\n"
+            f"📍 *Origen:* {origen}\n"
+            f"📦 *Pedido:* {pedido}\n"
+            f"🎯 *Destino:* {destino}\n"
+            f"🗒️ *Referencia:* {referencia}\n\n"
+            f"👤 *Cliente:* {nombre}\n"
+            f"⏰ *Hora:* {hora}"
+        )
+
+        await context.bot.send_message(
+            chat_id=CHANNEL_DOMICILIOS,
+            text=msg,
+            parse_mode="Markdown",
+        )
+
+        await update.message.reply_text(
+            "✔️ Tu solicitud fue enviada. Un domiciliario te contactará 💛",
+            reply_markup=user_keyboard
+        )
+
+        context.user_data.clear()
+        return
+
+, un móvil te contactará pronto 💛",
             reply_markup=user_keyboard
         )
 
