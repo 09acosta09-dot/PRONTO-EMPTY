@@ -1,30 +1,31 @@
-# PRONTO - Versión Webhook para Railway
-# Requisitos: python-telegram-bot v20+ y Flask
+# PRONTO - Webhook nativo para Railway
+# Requisitos: python-telegram-bot==20.4
 
 import os
 import logging
 import json
-from flask import Flask, request
-from telegram import Update
+from datetime import datetime
+from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
-    Application,
     ApplicationBuilder,
+    Application,
     CommandHandler,
-    ContextTypes,
     MessageHandler,
+    ContextTypes,
     filters,
 )
-from datetime import datetime
 
 # ----------------------------
 # CONFIG
 # ----------------------------
 
-TOKEN = "7668998247:AAGR7gxbJSfF-yuWtIOxMEFI1AYFinMJygg"
+TOKEN = "7668998247:AAGR7gxbJSFf-yuWtIOxMEFI1AYFinMJygg"
 
 ADMIN_IDS = [1741298723, 7076796229]
 
-WEBHOOK_URL = "https://pronto-empty-production.up.railway.app/webhook/" + TOKEN
+WEBHOOK_DOMAIN = "https://pronto-empty-production.up.railway.app"
+WEBHOOK_PATH = f"/webhook/{TOKEN}"
+WEBHOOK_URL = WEBHOOK_DOMAIN + WEBHOOK_PATH
 
 MOBILES_FILE = "mobiles.json"
 SERVICES_FILE = "services.json"
@@ -40,7 +41,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ----------------------------
-# BASES DE DATOS
+# BD SIMPLE
 # ----------------------------
 
 def load_json(path, default):
@@ -74,8 +75,6 @@ def is_admin(uid):
 # ----------------------------
 # TECLADOS / MENÚS
 # ----------------------------
-
-from telegram import KeyboardButton, ReplyKeyboardMarkup
 
 main_keyboard = ReplyKeyboardMarkup(
     [
@@ -114,12 +113,12 @@ admin_keyboard = ReplyKeyboardMarkup(
 )
 
 # ----------------------------
-# BOT HANDLERS
+# HANDLERS
 # ----------------------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Hola 💛\nBienvenido a PRONTO.\nElige una opción:",
+        "Hola 💛, soy PRONTO.\nElige una opción:",
         reply_markup=main_keyboard,
     )
 
@@ -127,40 +126,38 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     uid = update.effective_user.id
 
-    # Limpieza de pasos si vuelve al menú
+    # Volver al menú
     if text == "⬅️ Volver":
         context.user_data.clear()
         await update.message.reply_text("Volviste al menú principal.", reply_markup=main_keyboard)
         return
 
-    # ---- ADMIN SECTIONS ----
+    # ---------------- ADMIN ----------------
     if text == "Administrador":
         if not is_admin(uid):
             await update.message.reply_text("❌ No tienes permisos para esta sección.")
             return
-
         await update.message.reply_text("Panel Administrador 🛠️", reply_markup=admin_keyboard)
         return
-    
-    # Registrar móvil:
+
+    # Registrar móvil
     if is_admin(uid) and text == "➕ Registrar móvil":
         context.user_data["admin_action"] = "reg_nombre"
         context.user_data["temp"] = {}
-        await update.message.reply_text("Escribe el *nombre* del conductor:", parse_mode="Markdown")
+        await update.message.reply_text("Escribe el *nombre*:", parse_mode="Markdown")
         return
 
-    # Flujo registro:
+    # Flujo de registro
     if context.user_data.get("admin_action", "").startswith("reg_"):
-
         step = context.user_data["admin_action"]
         temp = context.user_data["temp"]
 
         if step == "reg_nombre":
             temp["nombre"] = text
             context.user_data["admin_action"] = "reg_cedula"
-            await update.message.reply_text("Ahora escribe la *cédula*:", parse_mode="Markdown")
+            await update.message.reply_text("Cédula:", parse_mode="Markdown")
             return
-        
+
         if step == "reg_cedula":
             temp["cedula"] = text
             context.user_data["admin_action"] = "reg_tipo"
@@ -172,7 +169,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data["admin_action"] = "reg_marca"
             await update.message.reply_text("Marca y modelo:", parse_mode="Markdown")
             return
-        
+
         if step == "reg_marca":
             temp["marca"] = text
             context.user_data["admin_action"] = "reg_placa"
@@ -192,11 +189,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             await update.message.reply_text(
                 f"✔️ Móvil registrado:\n\n"
-                f"Nombre: {temp['nombre']}\n"
-                f"Cédula: {temp['cedula']}\n"
-                f"Vehículo: {temp['tipo']}\n"
-                f"Marca/Modelo: {temp['marca']}\n"
-                f"Placa: {temp['placa']}\n"
+                f"👤 {temp['nombre']}\n"
+                f"🆔 {temp['cedula']}\n"
+                f"🚗 {temp['tipo']} - {temp['marca']}\n"
+                f"🔢 Placa: {temp['placa']}\n"
                 f"Estado: INACTIVO\n",
                 reply_markup=admin_keyboard,
             )
@@ -208,7 +204,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not moviles:
             await update.message.reply_text("No hay móviles registrados.")
             return
-        
+
         msg = "📋 *Móviles registrados:*\n\n"
         for m in moviles:
             estado = "ACTIVO ✅" if m["activo"] else "INACTIVO ⛔"
@@ -216,18 +212,18 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"👤 {m['nombre']} ({m['cedula']})\n"
                 f"🚗 {m['tipo']} - {m['marca']}\n"
                 f"🔢 {m['placa']}\n"
-                f"Estado: {estado}\n\n"
+                f"{estado}\n\n"
             )
         await update.message.reply_text(msg, parse_mode="Markdown")
         return
 
     # Aprobar pago
     if is_admin(uid) and text == "💳 Aprobar pago":
-        context.user_data["admin_action"] = "pago_cedula"
-        await update.message.reply_text("Escribe la *cédula* del móvil:", parse_mode="Markdown")
+        context.user_data["admin_action"] = "pago"
+        await update.message.reply_text("Cédula del móvil:", parse_mode="Markdown")
         return
 
-    if context.user_data.get("admin_action") == "pago_cedula":
+    if context.user_data.get("admin_action") == "pago":
         ced = text
         moviles = load_mobiles()
         found = False
@@ -243,12 +239,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if found:
             save_mobiles(moviles)
-            await update.message.reply_text(f"✔️ Móvil con cédula {ced} ACTIVADO.")
+            await update.message.reply_text("✔️ Móvil ACTIVADO.")
         else:
             await update.message.reply_text("❌ No existe esa cédula.")
         return
 
-    # ---- USUARIO ----
+    # ---------------- USUARIO ----------------
+
     if text == "Usuario":
         await update.message.reply_text("Menú Usuario 👤", reply_markup=user_keyboard)
         return
@@ -257,31 +254,12 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Menú Móvil 🚗", reply_markup=movil_keyboard)
         return
 
-    # ---- RESPUESTA GENERAL ----
-    await update.message.reply_text("Usa el menú, por favor 💛")
+    # Respuesta por defecto
+    await update.message.reply_text("Usa el menú 💛", reply_markup=main_keyboard)
 
 # ----------------------------
-# FLASK SERVER (WEBHOOK)
+# MAIN - WEBHOOK NATIVO
 # ----------------------------
-
-app = Flask(__name__)
-
-@app.route("/webhook/" + TOKEN, methods=["POST"])
-def webhook():
-    update = Update.de_json(request.get_json(force=True), application.bot)
-    application.update_queue.put_nowait(update)
-    return "OK", 200
-
-@app.route("/")
-def home():
-    return "PRONTO BOT RUNNING", 200
-
-# ----------------------------
-# MAIN BOT + WEBHOOK SETUP
-# ----------------------------
-
-async def init():
-    await application.bot.set_webhook(url=WEBHOOK_URL)
 
 if __name__ == "__main__":
     PORT = int(os.environ.get("PORT", 8080))
@@ -291,8 +269,15 @@ if __name__ == "__main__":
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
-    import threading
-    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=PORT)).start()
+    async def run():
+        await application.bot.set_webhook(WEBHOOK_URL)
+
+        await application.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path=WEBHOOK_PATH,
+            webhook_url=WEBHOOK_URL,
+        )
 
     import asyncio
-    asyncio.run(init())
+    asyncio.run(run())
