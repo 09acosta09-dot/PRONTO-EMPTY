@@ -387,6 +387,46 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         context.user_data.clear()
         return
+        # ---------------- TRASTEOS FLOW SIMPLE ----------------
+if text == "🚚 Pedir trasteo":
+    context.user_data["servicio"] = "trasteo_nombre"
+    await update.message.reply_text("👤 ¿Cuál es tu nombre completo?")
+    return
+
+# NOMBRE
+if context.user_data.get("servicio") == "trasteo_nombre":
+    context.user_data["nombre_trasteo"] = text
+    context.user_data["servicio"] = "trasteo_telefono"
+    await update.message.reply_text("📞 ¿Cuál es tu número de teléfono?")
+    return
+
+# TELÉFONO Y ENVÍO
+if context.user_data.get("servicio") == "trasteo_telefono":
+    telefono = text
+    nombre = context.user_data.get("nombre_trasteo")
+    hora = datetime.now().strftime("%I:%M %p")
+
+    msg = (
+        "🚚 *NUEVO SERVICIO DE TRASTEO* 🚚\n\n"
+        f"👤 *Cliente:* {nombre}\n"
+        f"📞 *Teléfono:* {telefono}\n"
+        f"⏰ *Hora:* {hora}"
+    )
+
+    await context.bot.send_message(
+        chat_id=CHANNEL_TRASTEOS,
+        text=msg,
+        parse_mode="Markdown",
+    )
+
+    await update.message.reply_text(
+        "✔️ Tu solicitud fue enviada, un móvil te contactará pronto 💛",
+        reply_markup=user_keyboard
+    )
+
+    context.user_data.clear()
+    return
+
 
         # ---------------- MÓVIL ----------------
     if text == "Móvil":
