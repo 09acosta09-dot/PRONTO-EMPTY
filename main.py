@@ -327,6 +327,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             "✔️ Tu solicitud fue enviada"
+        )
 
     # ----------------- SERVICIO DOMICILIOS -----------------
     if text == "📦 Pedir domicilio":
