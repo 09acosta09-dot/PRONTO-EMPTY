@@ -86,10 +86,13 @@ user_keyboard = ReplyKeyboardMarkup(
     [
         ["📦 Pedir domicilio"],
         ["🚕 Pedir taxi"],
+        ["🚚 Pedir trasteo"],
+        ["♿ Transporte discapacitados"],
         ["⬅️ Volver"],
     ],
     resize_keyboard=True,
 )
+
 
 movil_keyboard = ReplyKeyboardMarkup(
     [
