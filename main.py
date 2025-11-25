@@ -1,4 +1,4 @@
-## PRONTO - Webhook estable para Railway con ENDPOINT /corte
+# PRONTO - Webhook estable para Railway con ENDPOINT /corte
 # Compatible con python-telegram-bot[webhooks]==20.4
 
 import os
@@ -185,7 +185,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Nombre del conductor:")
         return
 
-    # Flujo registro
+    # Flujo registro móvil
     if context.user_data.get("admin_action", "").startswith("reg_"):
         temp = context.user_data["temp"]
         step = context.user_data["admin_action"]
@@ -273,8 +273,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 m["activo"] = True
                 found = True
                 break
-        context.user_data.clear()
         save_mobiles(mobiles)
+        context.user_data.clear()
         if found:
             await update.message.reply_text(f"✔️ Móvil {id_movil} ACTIVADO.")
         else:
@@ -285,7 +285,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "Usuario":
         await update.message.reply_text("Menú Usuario 👤", reply_markup=user_keyboard)
         return
-    # ----------------- SERVICIO TAXI -----------------
+
+    # ---------------- SERVICIO TAXI ----------------
     if text == "🚕 Pedir taxi":
         context.user_data["servicio"] = "taxi_origen"
         await update.message.reply_text("📍 Envíame tu ubicación o escríbela:")
@@ -294,13 +295,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("servicio") == "taxi_origen":
         context.user_data["origen"] = text
         context.user_data["servicio"] = "taxi_destino"
-        await update.message.reply_text("🎯 Ahora dime tu *destino*:")
+        await update.message.reply_text("🎯 ¿Cuál es tu *destino*?")
         return
 
     if context.user_data.get("servicio") == "taxi_destino":
         context.user_data["destino"] = text
         context.user_data["servicio"] = "taxi_referencia"
-        await update.message.reply_text("🗒️ ¿Alguna referencia adicional?")
+        await update.message.reply_text("🗒️ ¿Referencia?")
         return
 
     if context.user_data.get("servicio") == "taxi_referencia":
@@ -325,32 +326,32 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown",
         )
 
-        await update.message.reply_text(
-            "✔️ Tu solicitud fue enviada"
-        )
+        await update.message.reply_text("✔️ Tu solicitud fue enviada 💛", reply_markup=user_keyboard)
+        context.user_data.clear()
+        return
 
-    # ----------------- SERVICIO DOMICILIOS -----------------
+    # ---------------- SERVICIO DOMICILIOS ----------------
     if text == "📦 Pedir domicilio":
         context.user_data["servicio"] = "domicilio_origen"
-        await update.message.reply_text("📍 Envíame tu ubicación o escríbela:")
+        await update.message.reply_text("📍 ¿Cuál es el origen?")
         return
 
     if context.user_data.get("servicio") == "domicilio_origen":
         context.user_data["origen"] = text
         context.user_data["servicio"] = "domicilio_pedido"
-        await update.message.reply_text("📦 ¿Qué deseas enviar o pedir? (Ej: almuerzo, documento, mercado)")
+        await update.message.reply_text("📦 ¿Qué deseas enviar o pedir?")
         return
 
     if context.user_data.get("servicio") == "domicilio_pedido":
         context.user_data["pedido"] = text
         context.user_data["servicio"] = "domicilio_destino"
-        await update.message.reply_text("🎯 ¿Cuál es el destino?")
+        await update.message.reply_text("🎯 ¿Destino?")
         return
 
     if context.user_data.get("servicio") == "domicilio_destino":
         context.user_data["destino"] = text
         context.user_data["servicio"] = "domicilio_referencia"
-        await update.message.reply_text("🗒️ ¿Alguna referencia adicional?")
+        await update.message.reply_text("🗒️ ¿Referencia?")
         return
 
     if context.user_data.get("servicio") == "domicilio_referencia":
@@ -377,58 +378,45 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown",
         )
 
-        await update.message.reply_text(
-            "✔️ Tu solicitud fue enviada. Un domiciliario te contactará 💛",
-            reply_markup=user_keyboard
+        await update.message.reply_text("✔️ Tu solicitud fue enviada 💛", reply_markup=user_keyboard)
+        context.user_data.clear()
+        return
+
+    # ---------------- SERVICIO TRASTEOS ----------------
+    if text == "🚚 Pedir trasteo":
+        context.user_data["servicio"] = "trasteo_nombre"
+        await update.message.reply_text("👤 ¿Cuál es tu nombre completo?")
+        return
+
+    if context.user_data.get("servicio") == "trasteo_nombre":
+        context.user_data["nombre_trasteo"] = text
+        context.user_data["servicio"] = "trasteo_telefono"
+        await update.message.reply_text("📞 ¿Cuál es tu número de teléfono?")
+        return
+
+    if context.user_data.get("servicio") == "trasteo_telefono":
+        telefono = text
+        nombre = context.user_data.get("nombre_trasteo")
+        hora = datetime.now().strftime("%I:%M %p")
+
+        msg = (
+            "🚚 *NUEVO SERVICIO DE TRASTEO* 🚚\n\n"
+            f"👤 *Cliente:* {nombre}\n"
+            f"📞 *Teléfono:* {telefono}\n"
+            f"⏰ *Hora:* {hora}"
         )
 
+        await context.bot.send_message(
+            chat_id=CHANNEL_TRASTEOS,
+            text=msg,
+            parse_mode="Markdown",
+        )
+
+        await update.message.reply_text("✔️ Tu solicitud fue enviada 💛", reply_markup=user_keyboard)
         context.user_data.clear()
         return
 
-        context.user_data.clear()
-        return
-        # ---------------- TRASTEOS FLOW SIMPLE ----------------
-if text == "🚚 Pedir trasteo":
-    context.user_data["servicio"] = "trasteo_nombre"
-    await update.message.reply_text("👤 ¿Cuál es tu nombre completo?")
-    return
-
-# NOMBRE
-if context.user_data.get("servicio") == "trasteo_nombre":
-    context.user_data["nombre_trasteo"] = text
-    context.user_data["servicio"] = "trasteo_telefono"
-    await update.message.reply_text("📞 ¿Cuál es tu número de teléfono?")
-    return
-
-# TELÉFONO Y ENVÍO
-if context.user_data.get("servicio") == "trasteo_telefono":
-    telefono = text
-    nombre = context.user_data.get("nombre_trasteo")
-    hora = datetime.now().strftime("%I:%M %p")
-
-    msg = (
-        "🚚 *NUEVO SERVICIO DE TRASTEO* 🚚\n\n"
-        f"👤 *Cliente:* {nombre}\n"
-        f"📞 *Teléfono:* {telefono}\n"
-        f"⏰ *Hora:* {hora}"
-    )
-
-    await context.bot.send_message(
-        chat_id=CHANNEL_TRASTEOS,
-        text=msg,
-        parse_mode="Markdown",
-    )
-
-    await update.message.reply_text(
-        "✔️ Tu solicitud fue enviada, un móvil te contactará pronto 💛",
-        reply_markup=user_keyboard
-    )
-
-    context.user_data.clear()
-    return
-
-
-        # ---------------- MÓVIL ----------------
+    # ---------------- MÓVIL ----------------
     if text == "Móvil":
         mobile = get_mobile_by_telegram(uid)
         if not mobile:
@@ -438,15 +426,15 @@ if context.user_data.get("servicio") == "trasteo_telefono":
         await update.message.reply_text("Menú Móvil 🚗", reply_markup=movil_keyboard)
         return
 
-    # Iniciar jornada
     if text == "🟢 Iniciar jornada":
         mobile = get_mobile_by_telegram(uid)
         if not mobile:
-            await update.message.reply_text("No estás vinculado. Escribe tu ID primero.")
+            await update.message.reply_text("No estás vinculado.")
             return
         if not mobile.get("activo"):
             await update.message.reply_text("Tu pago está pendiente 💳.")
             return
+
         mobiles = load_mobiles()
         for m in mobiles:
             if m["id_movil"] == mobile["id_movil"]:
@@ -462,32 +450,32 @@ if context.user_data.get("servicio") == "trasteo_telefono":
                 )
                 await update.message.reply_text(f"Jornada iniciada.\nAcceso:\n{link.invite_link}")
             except:
-                await update.message.reply_text("No pude generar el acceso, contacta al admin.")
+                await update.message.reply_text("Error generando el acceso.")
         else:
             await update.message.reply_text("No encontré canal asignado.")
         return
 
-    # Finalizar jornada
     if text == "🔴 Finalizar jornada":
         mobile = get_mobile_by_telegram(uid)
         if not mobile:
             await update.message.reply_text("No estás vinculado.")
             return
+
         mobiles = load_mobiles()
         for m in mobiles:
             if m["id_movil"] == mobile["id_movil"]:
                 m["en_jornada"] = False
         save_mobiles(mobiles)
 
-        await update.message.reply_text("Jornada finalizada. Gracias 💛")
+        await update.message.reply_text("Jornada finalizada 💛")
         return
 
-    # Pagar jornada
     if text == "💳 Pagar mi jornada":
         mobile = get_mobile_by_telegram(uid)
         if not mobile:
-            await update.message.reply_text("Escribe tu ID de móvil primero.")
+            await update.message.reply_text("No estás vinculado.")
             return
+
         await update.message.reply_text(
             "💳 *PAGO NEQUI*\n\n"
             "Número: `3052915231`\n\n"
@@ -498,14 +486,15 @@ if context.user_data.get("servicio") == "trasteo_telefono":
         )
         return
 
-    # Estado del móvil
     if text == "📌 Estado":
         mobile = get_mobile_by_telegram(uid)
         if not mobile:
-            await update.message.reply_text("Vincula tu ID primero.")
+            await update.message.reply_text("No estás vinculado.")
             return
+
         estado = "ACTIVO" if mobile.get("activo") else "INACTIVO"
         jornada = "EN JORNADA" if mobile.get("en_jornada") else "FUERA DE JORNADA"
+
         await update.message.reply_text(
             f"📌 *Estado actual*\n\n"
             f"ID: {mobile['id_movil']}\n"
@@ -534,6 +523,7 @@ async def ejecutar_corte(context: ContextTypes.DEFAULT_TYPE):
             m["activo"] = False
             m["en_jornada"] = False
             cambios = True
+
             tid = m.get("telegram_id")
             if tid:
                 try:
@@ -546,14 +536,13 @@ async def ejecutar_corte(context: ContextTypes.DEFAULT_TYPE):
                     )
                 except:
                     pass
+
     if cambios:
         save_mobiles(mobiles)
 
 class CorteHandler(BaseHTTPRequestHandler):
-    """Servidor simple para manejar /corte externamente."""
     def do_GET(self):
         if self.path == "/corte":
-            # Ejecutar corte
             loop = application.bot._application_loop
             loop.create_task(ejecutar_corte(application.bot._context))
 
@@ -581,7 +570,6 @@ if __name__ == "__main__":
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
-    # Iniciar servidor para /corte en puerto 8000
     Thread(target=iniciar_servidor_corte, daemon=True).start()
 
     application.run_webhook(
