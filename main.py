@@ -1,4 +1,12 @@
+# PRONTO - Bot con módulo de ADMINISTRADOR
+# Requisitos: python-telegram-bot v20+
+# Ejecutar con: python main.py (en Railway se configura el comando de arranque)
+
 import logging
+import json
+import os
+from datetime import datetime
+
 from telegram import (
     Update,
     ReplyKeyboardMarkup,
@@ -17,18 +25,18 @@ from telegram.ext import (
 # ---------------------------
 TOKEN = "7668998247:AAGR7gxbJSfF-yuWtIOxMEFI1AYFinMJygg"
 
-# Canales (IDs confirmados, con -100...)
+# Admins (tú y tu cliente)
+ADMIN_IDS = [1741298723, 7076796229]
+
+# Canales (por si ya los usas en otros flujos)
 CHANNEL_TAXI = -1002697357566
 CHANNEL_DOMICILIOS = -1002503403579
 CHANNEL_TRASTEOS = -1002662309590
 CHANNEL_TRANSPORTE_DIS = -1002688723492
 
-SERVICE_CHANNELS = {
-    "domicilio": CHANNEL_DOMICILIOS,
-    "taxi": CHANNEL_TAXI,
-    "trasteo": CHANNEL_TRASTEOS,
-    "discapacitados": CHANNEL_TRANSPORTE_DIS,
-}
+# Archivos "base de datos" simples
+MOBILES_FILE = "mobiles.json"
+SERVICES_FILE = "services.json"
 
 # ---------------------------
 # LOGS
@@ -53,26 +61,22 @@ main_keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True,
 )
 
-# Menú para Usuarios
+# Menú para Usuarios (ejemplo, lo puedes ampliar)
 user_keyboard = ReplyKeyboardMarkup(
     [
-        [KeyboardButton("📍 Enviar ubicación", request_location=True)],
         [KeyboardButton("📦 Pedir domicilio")],
         [KeyboardButton("🚕 Pedir taxi")],
-        [KeyboardButton("🏠 Pedir trasteo")],
-        [KeyboardButton("♿ Transporte discapacitados")],
-        [KeyboardButton("⬅️ Volver al inicio")],
+        [KeyboardButton("⬅️ Volver al menú principal")],
     ],
     resize_keyboard=True,
 )
 
-# Menú para Móviles
-driver_keyboard = ReplyKeyboardMarkup(
+# Menú para Móviles (ejemplo, lo puedes ampliar)
+movil_keyboard = ReplyKeyboardMarkup(
     [
-        [KeyboardButton("📋 Ver servicios disponibles")],
-        [KeyboardButton("✅ Marcar servicio en curso")],
-        [KeyboardButton("✔️ Marcar servicio finalizado")],
-        [KeyboardButton("⬅️ Volver al inicio")],
+        [KeyboardButton("🟢 Marcar disponible")],
+        [KeyboardButton("🔴 Marcar no disponible")],
+        [KeyboardButton("⬅️ Volver al menú principal")],
     ],
     resize_keyboard=True,
 )
@@ -80,383 +84,416 @@ driver_keyboard = ReplyKeyboardMarkup(
 # Menú para Administrador
 admin_keyboard = ReplyKeyboardMarkup(
     [
-        [KeyboardButton("📊 Ver resumen del día")],
-        [KeyboardButton("🧾 Ver servicios activos")],
-        [KeyboardButton("⬅️ Volver al inicio")],
+        [KeyboardButton("➕ Registrar móvil"), KeyboardButton("📋 Ver móviles")],
+        [KeyboardButton("📜 Historial de servicios"), KeyboardButton("💳 Aprobar pago")],
+        [KeyboardButton("⬅️ Volver al menú principal")],
     ],
     resize_keyboard=True,
 )
+
+# ---------------------------
+# FUNCIONES AUXILIARES BD
+# ---------------------------
+
+def load_json(path, default):
+    if not os.path.exists(path):
+        return default
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Error cargando {path}: {e}")
+        return default
+
+
+def save_json(path, data):
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"Error guardando {path}: {e}")
+
+
+def load_mobiles():
+    return load_json(MOBILES_FILE, [])
+
+
+def save_mobiles(mobiles):
+    save_json(MOBILES_FILE, mobiles)
+
+
+def load_services():
+    return load_json(SERVICES_FILE, [])
+
+
+def save_services(services):
+    save_json(SERVICES_FILE, services)
+
+
+def is_admin(user_id: int) -> bool:
+    return user_id in ADMIN_IDS
+
 
 # ---------------------------
 # HANDLERS
 # ---------------------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Comando /start: muestra el menú principal de roles."""
     user = update.effective_user
-    context.user_data.clear()  # limpiamos cualquier estado anterior
-
-    text = (
-        f"Hola {user.first_name or ''}, soy PRONTO 🤖\n\n"
-        "¿Quién eres hoy?\n\n"
-        "• Usuario: quieres pedir un servicio\n"
-        "• Móvil: eres domiciliario / taxista\n"
-        "• Administrador: controlas la operación"
-    )
-
+    logger.info(f"/start de {user.id} - {user.first_name}")
     await update.message.reply_text(
-        text,
+        "Hola 💛, soy PRONTO.\n\n"
+        "Elige una opción del menú:",
         reply_markup=main_keyboard,
     )
 
 
-async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Maneja las opciones del menú principal (Usuario / Móvil / Administrador)."""
-    text = (update.message.text or "").strip().lower()
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    user = update.effective_user
+    user_id = user.id
 
-    # USUARIO
-    if text == "usuario":
-        context.user_data["rol"] = "usuario"
-        context.user_data.pop("estado", None)
-        context.user_data.pop("tipo_servicio", None)
+    logger.info(f"Mensaje de {user_id} ({user.first_name}): {text}")
+
+    # Si el admin está en algún flujo especial, lo manejamos primero
+    if is_admin(user_id):
+        # Flujo de registro de móvil
+        if context.user_data.get("admin_action") == "register_mobile":
+            await handle_admin_register_flow(update, context, text)
+            return
+
+        # Flujo de aprobación de pago
+        if context.user_data.get("admin_action") == "approve_payment":
+            await handle_admin_approve_flow(update, context, text)
+            return
+
+    # ------- Menú principal -------
+    if text == "Usuario":
         await update.message.reply_text(
-            "Has ingresado como Usuario.\n"
-            "Elige el servicio que deseas solicitar:",
+            "Menú de Usuario 👤\nElige una opción:",
             reply_markup=user_keyboard,
         )
+        return
 
-    # MÓVIL
-    elif text == "móvil" or text == "movil":
-        context.user_data["rol"] = "movil"
-        context.user_data.pop("estado", None)
-        context.user_data.pop("tipo_servicio", None)
+    if text == "Móvil":
         await update.message.reply_text(
-            "Has ingresado como Móvil.\n"
-            "Este es tu menú de trabajo:",
-            reply_markup=driver_keyboard,
+            "Menú para Móviles 🚗\nElige una opción:",
+            reply_markup=movil_keyboard,
         )
+        return
 
-    # ADMINISTRADOR
-    elif text == "administrador":
-        context.user_data["rol"] = "admin"
-        context.user_data.pop("estado", None)
-        context.user_data.pop("tipo_servicio", None)
+    if text == "Administrador":
+        # Verificar si es admin
+        if not is_admin(user_id):
+            await update.message.reply_text(
+                "⛔ Acceso denegado.\n\n"
+                "Esta sección es solo para administradores autorizados."
+            )
+            return
+
         await update.message.reply_text(
-            "Has ingresado como Administrador.\n"
-            "Estas son tus opciones:",
+            "Panel de Administrador 🛠️\nElige una opción:",
             reply_markup=admin_keyboard,
         )
+        return
 
-    # VOLVER AL INICIO (desde cualquier rol)
-    elif "volver al inicio" in text:
-        context.user_data.clear()
-        await start(update, context)
+    # ------- Botón volver al menú principal -------
+    if text == "⬅️ Volver al menú principal":
+        # Limpiamos posibles acciones pendientes del admin
+        context.user_data.pop("admin_action", None)
+        context.user_data.pop("register_step", None)
+        context.user_data.pop("register_temp", None)
+        context.user_data.pop("approve_step", None)
 
-    else:
-        # Si no reconoce, recuerda el menú según rol
-        rol = context.user_data.get("rol")
-        if rol == "usuario":
+        await update.message.reply_text(
+            "Has vuelto al menú principal.",
+            reply_markup=main_keyboard,
+        )
+        return
+
+    # ------- Opciones de ADMIN -------
+    if is_admin(user_id):
+        if text == "➕ Registrar móvil":
+            await start_admin_register_mobile(update, context)
+            return
+
+        if text == "📋 Ver móviles":
+            await admin_show_mobiles(update, context)
+            return
+
+        if text == "📜 Historial de servicios":
+            await admin_show_history(update, context)
+            return
+
+        if text == "💳 Aprobar pago":
+            await start_admin_approve_payment(update, context)
+            return
+
+    # ------- Opciones ejemplo de Usuario -------
+    if text == "📦 Pedir domicilio":
+        await update.message.reply_text(
+            "Aquí iría el flujo para pedir un domicilio 🏍️ (aún en construcción)."
+        )
+        return
+
+    if text == "🚕 Pedir taxi":
+        await update.message.reply_text(
+            "Aquí iría el flujo para pedir un taxi 🚕 (aún en construcción)."
+        )
+        return
+
+    # ------- Opciones ejemplo de Móvil -------
+    if text == "🟢 Marcar disponible":
+        await update.message.reply_text(
+            "Perfecto, has marcado tu estado como disponible ✅."
+        )
+        return
+
+    if text == "🔴 Marcar no disponible":
+        await update.message.reply_text(
+            "Listo, has marcado tu estado como no disponible ⛔."
+        )
+        return
+
+    # ------- Mensaje por defecto -------
+    await update.message.reply_text(
+        "No entiendo eso, usa el menú por favor 😊",
+        reply_markup=main_keyboard,
+    )
+
+# ---------------------------
+# ADMIN: REGISTRAR MÓVIL
+# ---------------------------
+
+async def start_admin_register_mobile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Inicia el flujo para registrar un nuevo móvil."""
+    context.user_data["admin_action"] = "register_mobile"
+    context.user_data["register_step"] = "nombre"
+    context.user_data["register_temp"] = {}
+
+    await update.message.reply_text(
+        "Vamos a registrar un nuevo móvil 🚗\n\n"
+        "Por favor escribe el *Nombre* del conductor:",
+        parse_mode="Markdown",
+    )
+
+
+async def handle_admin_register_flow(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+    step = context.user_data.get("register_step")
+    temp = context.user_data.get("register_temp", {})
+
+    if step == "nombre":
+        temp["nombre"] = text
+        context.user_data["register_step"] = "cedula"
+        context.user_data["register_temp"] = temp
+        await update.message.reply_text("Ahora escribe la *cédula* del conductor:", parse_mode="Markdown")
+        return
+
+    if step == "cedula":
+        temp["cedula"] = text
+        context.user_data["register_step"] = "tipo_vehiculo"
+        context.user_data["register_temp"] = temp
+        await update.message.reply_text("Escribe el *tipo de vehículo* (ej: moto, taxi, carro, etc.):", parse_mode="Markdown")
+        return
+
+    if step == "tipo_vehiculo":
+        temp["tipo_vehiculo"] = text
+        context.user_data["register_step"] = "marca_modelo"
+        context.user_data["register_temp"] = temp
+        await update.message.reply_text("Escribe la *marca y modelo* del vehículo:", parse_mode="Markdown")
+        return
+
+    if step == "marca_modelo":
+        temp["marca_modelo"] = text
+        context.user_data["register_step"] = "placa"
+        context.user_data["register_temp"] = temp
+        await update.message.reply_text("Finalmente, escribe la *placa* del vehículo:", parse_mode="Markdown")
+        return
+
+    if step == "placa":
+        temp["placa"] = text
+        temp["activo"] = False  # por defecto inactivo hasta que pague
+        temp["registrado_en"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        mobiles = load_mobiles()
+        mobiles.append(temp)
+        save_mobiles(mobiles)
+
+        # Limpiamos el flujo
+        context.user_data["admin_action"] = None
+        context.user_data["register_step"] = None
+        context.user_data["register_temp"] = None
+
+        resumen = (
+            f"✅ Móvil registrado correctamente:\n\n"
+            f"👤 Nombre: {temp['nombre']}\n"
+            f"🆔 Cédula: {temp['cedula']}\n"
+            f"🚘 Tipo: {temp['tipo_vehiculo']}\n"
+            f"🚗 Marca/Modelo: {temp['marca_modelo']}\n"
+            f"🔢 Placa: {temp['placa']}\n"
+            f"💳 Estado: INACTIVO (pendiente pago)\n"
+        )
+        await update.message.reply_text(
+            resumen,
+            reply_markup=admin_keyboard,
+        )
+        return
+
+    # Si por alguna razón el paso no está, reseteamos
+    context.user_data["admin_action"] = None
+    context.user_data["register_step"] = None
+    context.user_data["register_temp"] = None
+    await update.message.reply_text(
+        "Se perdió el flujo de registro, volvamos a empezar.",
+        reply_markup=admin_keyboard,
+    )
+
+
+# ---------------------------
+# ADMIN: VER MÓVILES
+# ---------------------------
+
+async def admin_show_mobiles(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    mobiles = load_mobiles()
+    if not mobiles:
+        await update.message.reply_text(
+            "No hay móviles registrados todavía.",
+            reply_markup=admin_keyboard,
+        )
+        return
+
+    lines = ["📋 *Móviles registrados:*", ""]
+    for i, m in enumerate(mobiles, start=1):
+        estado = "ACTIVO ✅" if m.get("activo") else "INACTIVO ⛔"
+        lines.append(
+            f"{i}. {m.get('nombre', 'N/A')} - {m.get('tipo_vehiculo', 'N/A')}\n"
+            f"   Cédula: {m.get('cedula', 'N/A')}\n"
+            f"   Marca/Modelo: {m.get('marca_modelo', 'N/A')}\n"
+            f"   Placa: {m.get('placa', 'N/A')}\n"
+            f"   Estado: {estado}\n"
+        )
+
+    msg = "\n".join(lines)
+    await update.message.reply_text(
+        msg,
+        parse_mode="Markdown",
+        reply_markup=admin_keyboard,
+    )
+
+
+# ---------------------------
+# ADMIN: HISTORIAL SERVICIOS
+# ---------------------------
+
+async def admin_show_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    services = load_services()
+    if not services:
+        await update.message.reply_text(
+            "Aún no hay historial de servicios registrados.",
+            reply_markup=admin_keyboard,
+        )
+        return
+
+    # Mostramos máximo los últimos 10 para no saturar
+    last_services = services[-10:]
+
+    lines = ["📜 *Últimos servicios registrados:*", ""]
+    for s in last_services:
+        fecha = s.get("fecha", "N/A")
+        cliente = s.get("cliente", "N/A")
+        direccion = s.get("direccion", "N/A")
+        operador = s.get("operador", "N/A")
+        estado = s.get("estado", "N/A")
+
+        lines.append(
+            f"🕒 {fecha}\n"
+            f"👤 Cliente: {cliente}\n"
+            f"📍 Dirección: {direccion}\n"
+            f"🚗 Operador: {operador}\n"
+            f"📌 Estado: {estado}\n"
+        )
+
+    msg = "\n".join(lines)
+    await update.message.reply_text(
+        msg,
+        parse_mode="Markdown",
+        reply_markup=admin_keyboard,
+    )
+
+
+# ---------------------------
+# ADMIN: APROBAR PAGO
+# ---------------------------
+
+async def start_admin_approve_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["admin_action"] = "approve_payment"
+    context.user_data["approve_step"] = "cedula"
+
+    await update.message.reply_text(
+        "💳 Aprobación de pago de un móvil.\n\n"
+        "Por favor escribe la *cédula* del móvil que ya realizó el pago:",
+        parse_mode="Markdown",
+    )
+
+
+async def handle_admin_approve_flow(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+    step = context.user_data.get("approve_step")
+
+    if step == "cedula":
+        cedula = text.strip()
+
+        mobiles = load_mobiles()
+        found = False
+        for m in mobiles:
+            if m.get("cedula") == cedula:
+                m["activo"] = True
+                m["activo_desde"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                found = True
+                break
+
+        if not found:
             await update.message.reply_text(
-                "Por favor usa el menú de Usuario.",
-                reply_markup=user_keyboard,
-            )
-        elif rol == "movil":
-            await update.message.reply_text(
-                "Por favor usa el menú de Móvil.",
-                reply_markup=driver_keyboard,
-            )
-        elif rol == "admin":
-            await update.message.reply_text(
-                "Por favor usa el menú de Administrador.",
+                "No encontré ningún móvil con esa cédula.\n"
+                "Verifica el dato o revisa la lista de móviles.",
                 reply_markup=admin_keyboard,
             )
         else:
+            save_mobiles(mobiles)
             await update.message.reply_text(
-                "Por favor usa las opciones del menú.",
-                reply_markup=main_keyboard,
+                f"✅ El móvil con cédula *{cedula}* ha sido marcado como ACTIVO.\n"
+                f"Ahora puede recibir servicios normalmente.",
+                parse_mode="Markdown",
+                reply_markup=admin_keyboard,
             )
 
-# ---------------------------
-# FLUJO DE USUARIO
-# ---------------------------
-
-async def handle_user_actions(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Opciones del menú de Usuario y captura de datos para envío a canales."""
-    text = (update.message.text or "").strip().lower()
-    estado = context.user_data.get("estado")
-    tipo_servicio = context.user_data.get("tipo_servicio")
-
-    # Volver al inicio siempre tiene prioridad
-    if "volver al inicio" in text:
-        context.user_data.clear()
-        await start(update, context)
+        # Limpiamos flujo
+        context.user_data["admin_action"] = None
+        context.user_data["approve_step"] = None
         return
 
-    # Si estamos esperando los datos del servicio
-    if estado == "esperando_datos" and tipo_servicio:
-        await procesar_solicitud_texto(update, context, tipo_servicio)
-        return
-
-    # Selección de servicio
-    if "pedir domicilio" in text:
-        context.user_data["tipo_servicio"] = "domicilio"
-        context.user_data["estado"] = "esperando_datos"
-        await update.message.reply_text(
-            "Has elegido: Domicilio.\n\n"
-            "Por favor escribe en un solo mensaje:\n"
-            "• Dirección completa\n"
-            "• Referencia del lugar\n"
-            "• Número de contacto",
-            reply_markup=user_keyboard,
-        )
-
-    elif "pedir taxi" in text:
-        context.user_data["tipo_servicio"] = "taxi"
-        context.user_data["estado"] = "esperando_datos"
-        await update.message.reply_text(
-            "Has elegido: Taxi.\n\n"
-            "Por favor escribe en un solo mensaje:\n"
-            "• Punto de recogida\n"
-            "• Destino\n"
-            "• Número de contacto",
-            reply_markup=user_keyboard,
-        )
-
-    elif "pedir trasteo" in text:
-        context.user_data["tipo_servicio"] = "trasteo"
-        context.user_data["estado"] = "esperando_datos"
-        await update.message.reply_text(
-            "Has elegido: Trasteo.\n\n"
-            "Por favor escribe en un solo mensaje:\n"
-            "• Dirección de origen\n"
-            "• Dirección de destino\n"
-            "• Tipo de trasteo (cantidad aproximada)\n"
-            "• Número de contacto",
-            reply_markup=user_keyboard,
-        )
-
-    elif "transporte discapacitados" in text:
-        context.user_data["tipo_servicio"] = "discapacitados"
-        context.user_data["estado"] = "esperando_datos"
-        await update.message.reply_text(
-            "Has elegido: Transporte para personas con discapacidad.\n\n"
-            "Por favor escribe en un solo mensaje:\n"
-            "• Punto de recogida\n"
-            "• Destino\n"
-            "• Número de contacto\n"
-            "• Observaciones importantes (si aplica)",
-            reply_markup=user_keyboard,
-        )
-
-    else:
-        # Si no coincide con ninguna opción, delegamos al menú principal
-        await handle_main_menu(update, context)
-
-
-async def procesar_solicitud_texto(update: Update, context: ContextTypes.DEFAULT_TYPE, tipo_servicio: str):
-    """Toma el mensaje de texto del cliente y lo envía al canal correspondiente."""
-    user = update.effective_user
-    detalle = update.message.text
-
-    canal = SERVICE_CHANNELS.get(tipo_servicio)
-    if canal is None:
-        await update.message.reply_text("No se encontró el canal para este servicio.")
-        context.user_data.pop("estado", None)
-        context.user_data.pop("tipo_servicio", None)
-        return
-
-    # Construir mensaje para el canal
-    servicio_nombre = {
-        "domicilio": "DOMICILIO",
-        "taxi": "TAXI",
-        "trasteo": "TRASTEO",
-        "discapacitados": "TRANSPORTE DISCAPACITADOS",
-    }.get(tipo_servicio, tipo_servicio.upper())
-
-    username = f"@{user.username}" if user.username else "Sin usuario"
-    chat_id = update.effective_chat.id
-
-    mensaje_canal = (
-        f"📢 NUEVO SERVICIO: {servicio_nombre}\n\n"
-        f"👤 Cliente: {user.full_name}\n"
-        f"🔗 Usuario: {username}\n"
-        f"💬 Chat ID: {chat_id}\n\n"
-        f"📝 Detalle del servicio:\n{detalle}\n\n"
-        f"Por favor contactar al cliente directamente por Telegram."
+    # Si algo raro pasa, limpiamos
+    context.user_data["admin_action"] = None
+    context.user_data["approve_step"] = None
+    await update.message.reply_text(
+        "Se perdió el flujo de aprobación, volvamos al menú de administrador.",
+        reply_markup=admin_keyboard,
     )
 
-    try:
-        await context.bot.send_message(chat_id=canal, text=mensaje_canal)
-        await update.message.reply_text(
-            "Tu solicitud ha sido enviada. Un operador se comunicará contigo en breve.",
-            reply_markup=user_keyboard,
-        )
-    except Exception as e:
-        logger.error(f"Error enviando al canal: {e}")
-        await update.message.reply_text(
-            "Ocurrió un error enviando tu solicitud. Intenta nuevamente más tarde.",
-            reply_markup=user_keyboard,
-        )
-
-    # Limpiar estado
-    context.user_data.pop("estado", None)
-    context.user_data.pop("tipo_servicio", None)
-
-
-# ---------------------------
-# FLUJO DE MÓVIL
-# ---------------------------
-
-async def handle_driver_actions(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Opciones del menú de Móvil (por ahora solo mensajes informativos)."""
-    text = (update.message.text or "").strip().lower()
-
-    if "ver servicios disponibles" in text:
-        await update.message.reply_text(
-            "Aquí se mostrarán los servicios disponibles para aceptar.\n"
-            "Esta sección se conectará con los canales en una siguiente etapa.",
-            reply_markup=driver_keyboard,
-        )
-    elif "marcar servicio en curso" in text:
-        await update.message.reply_text(
-            "Aquí podrás marcar un servicio como EN CURSO.",
-            reply_markup=driver_keyboard,
-        )
-    elif "marcar servicio finalizado" in text:
-        await update.message.reply_text(
-            "Aquí podrás marcar un servicio como FINALIZADO.",
-            reply_markup=driver_keyboard,
-        )
-    elif "volver al inicio" in text:
-        context.user_data.clear()
-        await start(update, context)
-    else:
-        await handle_main_menu(update, context)
-
-# ---------------------------
-# FLUJO DE ADMIN
-# ---------------------------
-
-async def handle_admin_actions(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Opciones del menú de Administrador (por ahora solo mensajes informativos)."""
-    text = (update.message.text or "").strip().lower()
-
-    if "ver resumen del día" in text:
-        await update.message.reply_text(
-            "Aquí se mostrará un resumen de los servicios del día.",
-            reply_markup=admin_keyboard,
-        )
-    elif "ver servicios activos" in text:
-        await update.message.reply_text(
-            "Aquí se mostrarán los servicios que estén en curso.",
-            reply_markup=admin_keyboard,
-        )
-    elif "volver al inicio" in text:
-        context.user_data.clear()
-        await start(update, context)
-    else:
-        await handle_main_menu(update, context)
-
-# ---------------------------
-# HANDLER DE UBICACIÓN
-# ---------------------------
-
-async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Cuando el usuario envía ubicación usando el botón."""
-    rol = context.user_data.get("rol")
-    estado = context.user_data.get("estado")
-    tipo_servicio = context.user_data.get("tipo_servicio")
-
-    if rol != "usuario" or estado != "esperando_datos" or not tipo_servicio:
-        await update.message.reply_text(
-            "Primero debes elegir un tipo de servicio en el menú de Usuario.",
-            reply_markup=user_keyboard,
-        )
-        return
-
-    location = update.message.location
-    lat = location.latitude
-    lon = location.longitude
-
-    canal = SERVICE_CHANNELS.get(tipo_servicio)
-    if canal is None:
-        await update.message.reply_text("No se encontró el canal para este servicio.")
-        context.user_data.pop("estado", None)
-        context.user_data.pop("tipo_servicio", None)
-        return
-
-    user = update.effective_user
-    username = f"@{user.username}" if user.username else "Sin usuario"
-    chat_id = update.effective_chat.id
-
-    maps_link = f"https://maps.google.com/?q={lat},{lon}"
-
-    servicio_nombre = {
-        "domicilio": "DOMICILIO",
-        "taxi": "TAXI",
-        "trasteo": "TRASTEO",
-        "discapacitados": "TRANSPORTE DISCAPACITADOS",
-    }.get(tipo_servicio, tipo_servicio.upper())
-
-    mensaje_canal = (
-        f"📢 NUEVO SERVICIO: {servicio_nombre}\n\n"
-        f"👤 Cliente: {user.full_name}\n"
-        f"🔗 Usuario: {username}\n"
-        f"💬 Chat ID: {chat_id}\n\n"
-        f"📍 Ubicación enviada:\n{maps_link}\n\n"
-        f"El cliente no escribió detalles adicionales.\n"
-        f"Por favor contactar al cliente directamente por Telegram."
-    )
-
-    try:
-        await context.bot.send_message(chat_id=canal, text=mensaje_canal)
-        await update.message.reply_text(
-            "Tu ubicación ha sido enviada. Un operador se comunicará contigo en breve.",
-            reply_markup=user_keyboard,
-        )
-    except Exception as e:
-        logger.error(f"Error enviando al canal: {e}")
-        await update.message.reply_text(
-            "Ocurrió un error enviando tu solicitud. Intenta nuevamente más tarde.",
-            reply_markup=user_keyboard,
-        )
-
-    context.user_data.pop("estado", None)
-    context.user_data.pop("tipo_servicio", None)
-
-# ---------------------------
-# ROUTER GENERAL
-# ---------------------------
-
-async def router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    rol = context.user_data.get("rol")
-
-    if rol == "usuario":
-        await handle_user_actions(update, context)
-    elif rol == "movil":
-        await handle_driver_actions(update, context)
-    elif rol == "admin":
-        await handle_admin_actions(update, context)
-    else:
-        await handle_main_menu(update, context)
 
 # ---------------------------
 # MAIN
 # ---------------------------
 
-def main():
-    app = ApplicationBuilder().token(TOKEN).build()
+async def main():
+    application = ApplicationBuilder().token(TOKEN).build()
 
-    # /start
-    app.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
-    # Mensajes de texto
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, router))
+    logger.info("Bot PRONTO iniciado. Esperando mensajes...")
+    await application.run_polling()
 
-    # Ubicación
-    app.add_handler(MessageHandler(filters.LOCATION, handle_location))
-
-    app.run_polling()
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())
