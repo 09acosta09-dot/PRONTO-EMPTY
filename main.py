@@ -1,4 +1,4 @@
-# PRONTO - Webhook estable para Railway con ENDPOINT /corte
+## PRONTO - Webhook estable para Railway con ENDPOINT /corte
 # Compatible con python-telegram-bot[webhooks]==20.4
 
 import os
@@ -383,10 +383,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         context.user_data.clear()
         return
-
-, un móvil te contactará pronto 💛",
-            reply_markup=user_keyboard
-        )
 
         context.user_data.clear()
         return
