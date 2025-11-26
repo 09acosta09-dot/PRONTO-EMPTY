@@ -142,7 +142,14 @@ admin_keyboard = ReplyKeyboardMarkup(
 # ----------------------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Hola 💛, soy PRONTO.\nElige una opción:", reply_markup=main_keyboard)
+    # Limpia cualquier estado atrapado
+    context.user_data.clear()
+
+    await update.message.reply_text(
+        "Hola 💛, soy PRONTO.\nElige una opción:",
+        reply_markup=main_keyboard
+    )
+
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
