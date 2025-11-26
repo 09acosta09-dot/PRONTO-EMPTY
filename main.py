@@ -448,35 +448,66 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # --- INICIAR JORNADA
-    if text == "🟢 Iniciar jornada":
-        mobile = get_mobile_by_telegram(uid)
-        if not mobile:
-            await update.message.reply_text("No estás vinculado.")
-            return
+    from datetime import datetime, time
 
-        if not mobile.get("activo"):
-            await update.message.reply_text("Tu pago está pendiente 💳.")
-            return
+# -----------------------------------
+# FUNCIÓN: DETERMINAR SI DEBE PAGAR
+# -----------------------------------
+def requiere_pago():
+    ahora = datetime.now().time()
+    hora_limite = time(15, 0)  # 3:00 pm
+    return ahora >= hora_limite  # Solo aplicar bloqueo después de las 3pm
 
-        mobiles = load_mobiles()
-        for m in mobiles:
-            if m["id_movil"] == mobile["id_movil"]:
-                m["en_jornada"] = True
-        save_mobiles(mobiles)
 
-        channel = get_channel_for_mobile(mobile)
-        if channel:
-            try:
-                link = await context.bot.create_chat_invite_link(
-                    chat_id=channel,
-                    name=f"Acceso {mobile['id_movil']}",
-                )
-                await update.message.reply_text(f"Jornada iniciada.\nAcceso:\n{link.invite_link}")
-            except:
-                await update.message.reply_text("Error generando el acceso.")
-        else:
-            await update.message.reply_text("No encontré canal asignado.")
+# -----------------------------------
+# FUNCIÓN: INICIAR JORNADA
+# -----------------------------------
+async def iniciar_jornada(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    mobiles = cargar_mobiles()
+
+    if str(user_id) not in mobiles:
+        await update.message.reply_text("No estás registrado como móvil 🚫")
         return
+
+    movil = mobiles[str(user_id)]
+    nombre = movil.get("nombre", "Móvil")
+    servicio = movil.get("servicio", None)
+    pagado = movil.get("pagado", False)
+
+    # ⚠️ BLOQUEO SI ES DESPUÉS DE LAS 3PM Y NO HA PAGADO
+    if requiere_pago() and not pagado:
+        await update.message.reply_text(
+            "⛔ *Debes pagar tu cuota diaria para continuar trabajando*\n"
+            "El sistema se bloquea desde las 3:00 pm.\n\n"
+            "Por favor realiza tu pago y espera aprobación del administrador ❤️",
+            parse_mode="Markdown"
+        )
+        return
+
+    # LINKS REALES DE LOS CANALES
+    enlaces = {
+        "taxi": "https://t.me/c/1002697357566",  
+        "domicilios": "https://t.me/c/1002503403579",
+        "trasteos": "https://t.me/c/1002662309590",
+        "discapacidad": "https://t.me/c/1002688723492",
+    }
+
+    if servicio not in enlaces:
+        await update.message.reply_text("Error: No tienes un servicio asignado 🚫")
+        return
+
+    enlace = enlaces[servicio]
+
+    # ACTIVACIÓN DE JORNADA
+    movil["activo"] = True
+    guardar_mobiles(mobiles)
+
+    await update.message.reply_text(
+        f"🚀 *Jornada iniciada*\n"
+        f"Bienvenido {nombre}, ya puedes recibir servicios aquí:\n{enlace}",
+        parse_mode="Markdown"
+    )
 
     # --- FINALIZAR JORNADA
     if text == "🔴 Finalizar jornada":
