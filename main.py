@@ -72,14 +72,14 @@ def is_admin(uid):
     return uid in ADMIN_IDS
 
 def get_mobile_by_telegram(uid):
-    mobiles = load_mobiles()
+    mobiles = load_mobiles()  # SIEMPRE RELOAD
     for m in mobiles:
         if m.get("telegram_id") == uid:
             return m
     return None
 
 def get_mobile_by_id(id_movil):
-    mobiles = load_mobiles()
+    mobiles = load_mobiles()  # SIEMPRE RELOAD
     for m in mobiles:
         if m.get("id_movil") == id_movil:
             return m
@@ -155,11 +155,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not m:
             await update.message.reply_text("Ese ID no existe. Ejemplo correcto: P100")
             return
+
         mobiles = load_mobiles()
         for mob in mobiles:
             if mob.get("id_movil") == id_movil:
                 mob["telegram_id"] = uid
         save_mobiles(mobiles)
+
         context.user_data["mobile_linking"] = False
         await update.message.reply_text(f"Vinculado correctamente como {id_movil}.", reply_markup=movil_keyboard)
         return
@@ -185,7 +187,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Nombre del conductor:")
         return
 
-    # Flujo registro móvil
+    # ---------------- FLUJO REGISTRO ----------------
     if context.user_data.get("admin_action", "").startswith("reg_"):
         temp = context.user_data["temp"]
         step = context.user_data["admin_action"]
@@ -239,7 +241,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-    # Ver móviles
+    # ---------------- VER MOVILES ----------------
     if is_admin(uid) and text == "📋 Ver móviles":
         mobiles = load_mobiles()
         if not mobiles:
@@ -247,7 +249,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         msg = "📋 *Móviles registrados:*\n\n"
         for m in mobiles:
-            estado = "ACTIVO" if m.get("activo") else "INACTIVO"
+            estado = "ACTIVO" if m.get("activo") else "INACTACTIVO"
             msg += (
                 f"ID: {m['id_movil']}\n"
                 f"{m['nombre']} - {m['cedula']}\n"
@@ -258,7 +260,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg, parse_mode="Markdown")
         return
 
-    # Aprobar pago
+    # ---------------- APROBAR PAGO ----------------
     if is_admin(uid) and text == "💳 Aprobar pago":
         context.user_data["admin_action"] = "pago_id"
         await update.message.reply_text("Escribe el ID del móvil (ej: P100):")
@@ -286,7 +288,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Menú Usuario 👤", reply_markup=user_keyboard)
         return
 
-    # ---------------- SERVICIO TAXI ----------------
+    # ---------------- SERVICIOS ----------------
+    # --- Taxi
     if text == "🚕 Pedir taxi":
         context.user_data["servicio"] = "taxi_origen"
         await update.message.reply_text("📍 Envíame tu ubicación o escríbela:")
@@ -295,7 +298,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("servicio") == "taxi_origen":
         context.user_data["origen"] = text
         context.user_data["servicio"] = "taxi_destino"
-        await update.message.reply_text("🎯 ¿Cuál es tu *destino*?")
+        await update.message.reply_text("🎯 ¿Cuál es tu destino?")
         return
 
     if context.user_data.get("servicio") == "taxi_destino":
@@ -320,41 +323,36 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"⏰ *Hora:* {hora}"
         )
 
-        await context.bot.send_message(
-            chat_id=CHANNEL_TAXI,
-            text=msg,
-            parse_mode="Markdown",
-        )
-
+        await context.bot.send_message(chat_id=CHANNEL_TAXI, text=msg, parse_mode="Markdown")
         await update.message.reply_text("✔️ Tu solicitud fue enviada 💛", reply_markup=user_keyboard)
         context.user_data.clear()
         return
 
-    # ---------------- SERVICIO DOMICILIOS ----------------
+    # --- Domicilios
     if text == "📦 Pedir domicilio":
-        context.user_data["servicio"] = "domicilio_origen"
+        context.user_data["servicio"] = "dom_origen"
         await update.message.reply_text("📍 ¿Cuál es el origen?")
         return
 
-    if context.user_data.get("servicio") == "domicilio_origen":
+    if context.user_data.get("servicio") == "dom_origen":
         context.user_data["origen"] = text
-        context.user_data["servicio"] = "domicilio_pedido"
+        context.user_data["servicio"] = "dom_pedido"
         await update.message.reply_text("📦 ¿Qué deseas enviar o pedir?")
         return
 
-    if context.user_data.get("servicio") == "domicilio_pedido":
+    if context.user_data.get("servicio") == "dom_pedido":
         context.user_data["pedido"] = text
-        context.user_data["servicio"] = "domicilio_destino"
+        context.user_data["servicio"] = "dom_destino"
         await update.message.reply_text("🎯 ¿Destino?")
         return
 
-    if context.user_data.get("servicio") == "domicilio_destino":
+    if context.user_data.get("servicio") == "dom_destino":
         context.user_data["destino"] = text
-        context.user_data["servicio"] = "domicilio_referencia"
+        context.user_data["servicio"] = "dom_referencia"
         await update.message.reply_text("🗒️ ¿Referencia?")
         return
 
-    if context.user_data.get("servicio") == "domicilio_referencia":
+    if context.user_data.get("servicio") == "dom_referencia":
         referencia = text
         origen = context.user_data.get("origen")
         pedido = context.user_data.get("pedido")
@@ -372,31 +370,26 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"⏰ *Hora:* {hora}"
         )
 
-        await context.bot.send_message(
-            chat_id=CHANNEL_DOMICILIOS,
-            text=msg,
-            parse_mode="Markdown",
-        )
-
+        await context.bot.send_message(chat_id=CHANNEL_DOMICILIOS, text=msg, parse_mode="Markdown")
         await update.message.reply_text("✔️ Tu solicitud fue enviada 💛", reply_markup=user_keyboard)
         context.user_data.clear()
         return
 
-    # ---------------- SERVICIO TRASTEOS ----------------
+    # --- Trasteos
     if text == "🚚 Pedir trasteo":
-        context.user_data["servicio"] = "trasteo_nombre"
+        context.user_data["servicio"] = "tras_nombre"
         await update.message.reply_text("👤 ¿Cuál es tu nombre completo?")
         return
 
-    if context.user_data.get("servicio") == "trasteo_nombre":
-        context.user_data["nombre_trasteo"] = text
-        context.user_data["servicio"] = "trasteo_telefono"
-        await update.message.reply_text("📞 ¿Cuál es tu número de teléfono?")
+    if context.user_data.get("servicio") == "tras_nombre":
+        context.user_data["nombre"] = text
+        context.user_data["servicio"] = "tras_tel"
+        await update.message.reply_text("📞 ¿Tu número?")
         return
 
-    if context.user_data.get("servicio") == "trasteo_telefono":
+    if context.user_data.get("servicio") == "tras_tel":
         telefono = text
-        nombre = context.user_data.get("nombre_trasteo")
+        nombre = context.user_data.get("nombre")
         hora = datetime.now().strftime("%I:%M %p")
 
         msg = (
@@ -406,12 +399,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"⏰ *Hora:* {hora}"
         )
 
-        await context.bot.send_message(
-            chat_id=CHANNEL_TRASTEOS,
-            text=msg,
-            parse_mode="Markdown",
-        )
-
+        await context.bot.send_message(chat_id=CHANNEL_TRASTEOS, text=msg, parse_mode="Markdown")
         await update.message.reply_text("✔️ Tu solicitud fue enviada 💛", reply_markup=user_keyboard)
         context.user_data.clear()
         return
@@ -426,11 +414,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Menú Móvil 🚗", reply_markup=movil_keyboard)
         return
 
+    # --- INICIAR JORNADA
     if text == "🟢 Iniciar jornada":
         mobile = get_mobile_by_telegram(uid)
         if not mobile:
             await update.message.reply_text("No estás vinculado.")
             return
+
         if not mobile.get("activo"):
             await update.message.reply_text("Tu pago está pendiente 💳.")
             return
@@ -455,6 +445,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("No encontré canal asignado.")
         return
 
+    # --- FINALIZAR JORNADA
     if text == "🔴 Finalizar jornada":
         mobile = get_mobile_by_telegram(uid)
         if not mobile:
@@ -470,6 +461,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Jornada finalizada 💛")
         return
 
+    # --- PAGO
     if text == "💳 Pagar mi jornada":
         mobile = get_mobile_by_telegram(uid)
         if not mobile:
@@ -479,15 +471,16 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "💳 *PAGO NEQUI*\n\n"
             "Número: `3052915231`\n\n"
-            "En el mensaje escribe:\n"
+            "Mensaje:\n"
             f"`Móvil {mobile['id_movil']}`\n\n"
             "Espera aprobación del administrador.",
             parse_mode="Markdown",
         )
         return
 
+    # --- ESTADO
     if text == "📌 Estado":
-        mobile = get_mobile_by_telegram(uid)
+        mobile = get_mobile_by_telegram(uid)  # RECARGADO
         if not mobile:
             await update.message.reply_text("No estás vinculado.")
             return
@@ -510,8 +503,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("Usa el menú 💛", reply_markup=main_keyboard)
 
+
 # ----------------------------
-# ENDPOINT /corte LLAMADO POR CRON A LAS 3 PM
+# ENDPOINT /corte (CRON 3 PM)
 # ----------------------------
 
 async def ejecutar_corte(context: ContextTypes.DEFAULT_TYPE):
