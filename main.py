@@ -72,14 +72,14 @@ def is_admin(uid):
     return uid in ADMIN_IDS
 
 def get_mobile_by_telegram(uid):
-    mobiles = load_mobiles()  # SIEMPRE RELOAD
+    mobiles = load_mobiles()
     for m in mobiles:
         if m.get("telegram_id") == uid:
             return m
     return None
 
 def get_mobile_by_id(id_movil):
-    mobiles = load_mobiles()  # SIEMPRE RELOAD
+    mobiles = load_mobiles()
     for m in mobiles:
         if m.get("id_movil") == id_movil:
             return m
@@ -187,7 +187,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Nombre del conductor:")
         return
 
-    # ---------------- FLUJO REGISTRO ----------------
+    # ---------------- REGISTRO FLUJO ----------------
     if context.user_data.get("admin_action", "").startswith("reg_"):
         temp = context.user_data["temp"]
         step = context.user_data["admin_action"]
@@ -249,7 +249,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         msg = "📋 *Móviles registrados:*\n\n"
         for m in mobiles:
-            estado = "ACTIVO" if m.get("activo") else "INACTACTIVO"
+            estado = "ACTIVO" if m.get("activo") else "INACTIVO"
             msg += (
                 f"ID: {m['id_movil']}\n"
                 f"{m['nombre']} - {m['cedula']}\n"
@@ -288,8 +288,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Menú Usuario 👤", reply_markup=user_keyboard)
         return
 
-    # ---------------- SERVICIOS ----------------
-    # --- Taxi
+    # ---------------- SERVICIO TAXI ----------------
     if text == "🚕 Pedir taxi":
         context.user_data["servicio"] = "taxi_origen"
         await update.message.reply_text("📍 Envíame tu ubicación o escríbela:")
@@ -298,7 +297,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("servicio") == "taxi_origen":
         context.user_data["origen"] = text
         context.user_data["servicio"] = "taxi_destino"
-        await update.message.reply_text("🎯 ¿Cuál es tu destino?")
+        await update.message.reply_text("🎯 ¿Cuál es tu *destino*?")
         return
 
     if context.user_data.get("servicio") == "taxi_destino":
@@ -328,7 +327,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.clear()
         return
 
-    # --- Domicilios
+    # ---------------- SERVICIO DOMICILIOS ----------------
     if text == "📦 Pedir domicilio":
         context.user_data["servicio"] = "dom_origen"
         await update.message.reply_text("📍 ¿Cuál es el origen?")
@@ -375,21 +374,21 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.clear()
         return
 
-    # --- Trasteos
+    # ---------------- SERVICIO TRASTEOS ----------------
     if text == "🚚 Pedir trasteo":
         context.user_data["servicio"] = "tras_nombre"
         await update.message.reply_text("👤 ¿Cuál es tu nombre completo?")
         return
 
     if context.user_data.get("servicio") == "tras_nombre":
-        context.user_data["nombre"] = text
+        context.user_data["nombre_trasteo"] = text
         context.user_data["servicio"] = "tras_tel"
-        await update.message.reply_text("📞 ¿Tu número?")
+        await update.message.reply_text("📞 ¿Cuál es tu número de teléfono?")
         return
 
     if context.user_data.get("servicio") == "tras_tel":
         telefono = text
-        nombre = context.user_data.get("nombre")
+        nombre = context.user_data.get("nombre_trasteo")
         hora = datetime.now().strftime("%I:%M %p")
 
         msg = (
@@ -400,6 +399,40 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         await context.bot.send_message(chat_id=CHANNEL_TRASTEOS, text=msg, parse_mode="Markdown")
+        await update.message.reply_text("✔️ Tu solicitud fue enviada 💛", reply_markup=user_keyboard)
+        context.user_data.clear()
+        return
+
+    # ---------------- SERVICIO DISCAPACITADOS (IGUAL A TRASTEOS) ----------------
+    if text == "♿ Transporte discapacitados":
+        context.user_data["servicio"] = "dis_nombre"
+        await update.message.reply_text("👤 ¿Cuál es tu nombre completo?")
+        return
+
+    if context.user_data.get("servicio") == "dis_nombre":
+        context.user_data["nombre_dis"] = text
+        context.user_data["servicio"] = "dis_tel"
+        await update.message.reply_text("📞 ¿Cuál es tu número de teléfono?")
+        return
+
+    if context.user_data.get("servicio") == "dis_tel":
+        telefono = text
+        nombre = context.user_data.get("nombre_dis")
+        hora = datetime.now().strftime("%I:%M %p")
+
+        msg = (
+            "♿ *NUEVO SERVICIO – TRANSPORTE A DISCAPACITADOS* ♿\n\n"
+            f"👤 *Cliente:* {nombre}\n"
+            f"📞 *Teléfono:* {telefono}\n"
+            f"⏰ *Hora:* {hora}"
+        )
+
+        await context.bot.send_message(
+            chat_id=CHANNEL_TRANSPORTE_DIS,
+            text=msg,
+            parse_mode="Markdown"
+        )
+
         await update.message.reply_text("✔️ Tu solicitud fue enviada 💛", reply_markup=user_keyboard)
         context.user_data.clear()
         return
@@ -480,7 +513,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # --- ESTADO
     if text == "📌 Estado":
-        mobile = get_mobile_by_telegram(uid)  # RECARGADO
+        mobile = get_mobile_by_telegram(uid)
         if not mobile:
             await update.message.reply_text("No estás vinculado.")
             return
@@ -502,7 +535,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await update.message.reply_text("Usa el menú 💛", reply_markup=main_keyboard)
-
 
 # ----------------------------
 # ENDPOINT /corte (CRON 3 PM)
