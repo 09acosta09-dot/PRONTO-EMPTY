@@ -467,54 +467,51 @@ def requiere_pago():
 
 
 # -----------------------------------
-# FUNCIÓN: INICIAR JORNADA
-# -----------------------------------
+# FUNCIÓN: INICIAR JORNADA (CORREGIDA)
+# --------------------------------------
 async def iniciar_jornada(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    mobiles = cargar_mobiles()
+    user = update.effective_user
+    user_id = user.id
 
-    if str(user_id) not in mobiles:
-        await update.message.reply_text("No estás registrado como móvil 🚫")
+    # Cargar móviles
+    if os.path.exists(MOBILES_FILE):
+        with open(MOBILES_FILE, "r") as f:
+            moviles = json.load(f)
+    else:
+        moviles = {}
+
+    # Validar registro
+    if str(user_id) not in moviles:
+        await update.message.reply_text("❌ No estás registrado como móvil.")
         return
 
-    movil = mobiles[str(user_id)]
-    nombre = movil.get("nombre", "Móvil")
-    servicio = movil.get("servicio", None)
-    pagado = movil.get("pagado", False)
+    movil = moviles[str(user_id)]
+    servicio = movil.get("servicio")
 
-    # ⚠️ BLOQUEO SI ES DESPUÉS DE LAS 3PM Y NO HA PAGADO
-    if requiere_pago() and not pagado:
-        await update.message.reply_text(
-            "⛔ *Debes pagar tu cuota diaria para continuar trabajando*\n"
-            "El sistema se bloquea desde las 3:00 pm.\n\n"
-            "Por favor realiza tu pago y espera aprobación del administrador ❤️",
-            parse_mode="Markdown"
-        )
-        return
-
-    # LINKS REALES DE LOS CANALES
-    enlaces = {
-        "taxi": "https://t.me/c/1002697357566",  
-        "domicilios": "https://t.me/c/1002503403579",
-        "trasteos": "https://t.me/c/1002662309590",
-        "discapacidad": "https://t.me/c/1002688723492",
+    # ENVIAR CANAL SEGÚN SERVICIO (CORREGIDO)
+    canales = {
+        "taxi": "https://t.me/+joxg5tTv_5Y3NTkx",
+        "domicilios": "https://t.me/+sWSXu2l1wM1lMWUx",
+        "trasteos": "https://t.me/+0zFzLeA2yK1jZmUx",
+        "discapacitados": "https://t.me/+n9kZ8F8PZsJjYzAx"
     }
 
-    if servicio not in enlaces:
-        await update.message.reply_text("Error: No tienes un servicio asignado 🚫")
+    if servicio in canales:
+        await update.message.reply_text(
+            f"🔗 Tu canal de trabajo es:\n{canales[servicio]}"
+        )
+    else:
+        await update.message.reply_text("⚠️ No tienes un servicio asignado.")
         return
 
-    enlace = enlaces[servicio]
+    # Activar jornada
+    movil["jornada"] = True
 
-    # ACTIVACIÓN DE JORNADA
-    movil["activo"] = True
-    guardar_mobiles(mobiles)
+    # Guardar cambios
+    with open(MOBILES_FILE, "w") as f:
+        json.dump(moviles, f, indent=4)
 
-    await update.message.reply_text(
-        f"🚀 *Jornada iniciada*\n"
-        f"Bienvenido {nombre}, ya puedes recibir servicios aquí:\n{enlace}",
-        parse_mode="Markdown"
-    )
+    await update.message.reply_text("✅ Jornada iniciada. Ya puedes recibir servicios.")
 
     # --- FINALIZAR JORNADA
     if text == "🔴 Finalizar jornada":
