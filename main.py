@@ -37,11 +37,12 @@ CHANNEL_TRASTEOS = -1002662309590
 CHANNEL_TRANSPORTE_DIS = -1002688723492
 
 # LINKS para que los MÓVILES entren a los canales
-# (Si cambias el link de invitación del canal, solo actualizas esto)
-LINK_TAXI = "https://t.me/+joxg5tTv_5Y3NTkx"
-LINK_DOMICILIOS = "https://t.me/+sWSXu2l1wM1lMWUx"
-LINK_TRASTEOS = "https://t.me/+0zFzLeA2yK1jZmUx"
-LINK_DISCAPACITADOS = "https://t.me/+n9kZ8F8PZsJjYzAx"
+# ----------------------------
+LINK_TRASTEOS = "https://t.me/+KRam-XSvPQ5jNjRh"
+LINK_DOMICILIOS = "https://t.me/+gZvnu8zolb1iOTBh"
+LINK_TRANSP_DIS = "https://t.me/+REkbglMlfxE3YjI5"
+LINK_TAXI = "https://t.me/+Drczf-TdHCUzNDZh"
+
 
 # ----------------------------
 # LOGS
