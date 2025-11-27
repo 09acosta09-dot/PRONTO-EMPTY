@@ -4,7 +4,7 @@
 import os
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, time
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -30,10 +30,18 @@ WEBHOOK_URL = WEBHOOK_DOMAIN + WEBHOOK_PATH
 
 MOBILES_FILE = "mobiles.json"
 
+# IDs reales de los canales (para que el BOT ENVÍE mensajes)
 CHANNEL_TAXI = -1002697357566
 CHANNEL_DOMICILIOS = -1002503403579
 CHANNEL_TRASTEOS = -1002662309590
 CHANNEL_TRANSPORTE_DIS = -1002688723492
+
+# LINKS para que los MÓVILES entren a los canales
+# (Si cambias el link de invitación del canal, solo actualizas esto)
+LINK_TAXI = "https://t.me/+joxg5tTv_5Y3NTkx"
+LINK_DOMICILIOS = "https://t.me/+sWSXu2l1wM1lMWUx"
+LINK_TRASTEOS = "https://t.me/+0zFzLeA2yK1jZmUx"
+LINK_DISCAPACITADOS = "https://t.me/+n9kZ8F8PZsJjYzAx"
 
 # ----------------------------
 # LOGS
@@ -86,6 +94,7 @@ def get_mobile_by_id(id_movil):
     return None
 
 def get_channel_for_mobile(m):
+    """Devuelve el ID del canal según el tipo de móvil (para enviar SERVICIOS)."""
     tipo = (m.get("tipo") or "").lower()
     if "taxi" in tipo:
         return CHANNEL_TAXI
@@ -96,6 +105,28 @@ def get_channel_for_mobile(m):
     if "dis" in tipo or "cap" in tipo:
         return CHANNEL_TRANSPORTE_DIS
     return None
+
+def get_link_for_mobile(m):
+    """Devuelve el LINK del canal para que el móvil entre a verlo."""
+    tipo = (m.get("tipo") or "").lower()
+    if "taxi" in tipo:
+        return LINK_TAXI
+    if "domic" in tipo:
+        return LINK_DOMICILIOS
+    if "trast" in tipo:
+        return LINK_TRASTEOS
+    if "dis" in tipo or "cap" in tipo:
+        return LINK_DISCAPACITADOS
+    return None
+
+# -----------------------------------
+# FUNCIÓN: DETERMINAR SI DEBE PAGAR
+# -----------------------------------
+def requiere_pago():
+    # Después de las 3:00 pm se exige pago activo
+    ahora = datetime.now().time()
+    hora_limite = time(15, 0)  # 3:00 pm
+    return ahora >= hora_limite
 
 # ----------------------------
 # TECLADOS
@@ -138,6 +169,101 @@ admin_keyboard = ReplyKeyboardMarkup(
 )
 
 # ----------------------------
+# FUNCIONES MÓVIL
+# ----------------------------
+
+async def accion_iniciar_jornada(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    mobile = get_mobile_by_telegram(uid)
+
+    if not mobile:
+        await update.message.reply_text("No estás vinculado. Escribe tu ID de móvil (ej: P100) en el menú Móvil.")
+        return
+
+    # Si es después de las 3pm y NO está activo, debe pagar
+    if requiere_pago() and not mobile.get("activo"):
+        await update.message.reply_text(
+            "⏰ Ya pasó la hora de corte (3:00 PM).\n"
+            "Para iniciar jornada debes estar ACTIVO.\n"
+            "Usa el botón 💳 Pagar mi jornada y espera aprobación del administrador."
+        )
+        return
+
+    # Marcar en_jornada = True
+    mobiles = load_mobiles()
+    for m in mobiles:
+        if m["id_movil"] == mobile["id_movil"]:
+            m["en_jornada"] = True
+    save_mobiles(mobiles)
+
+    # Enviar link del canal
+    link = get_link_for_mobile(mobile)
+    if link:
+        await update.message.reply_text(
+            f"🔗 Tu canal de trabajo es:\n{link}"
+        )
+    else:
+        await update.message.reply_text("⚠️ No tienes un canal asignado según tu tipo de vehículo.")
+
+    await update.message.reply_text("✅ Jornada iniciada. Ya puedes recibir servicios.", reply_markup=movil_keyboard)
+
+async def accion_finalizar_jornada(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    mobile = get_mobile_by_telegram(uid)
+
+    if not mobile:
+        await update.message.reply_text("No estás vinculado.")
+        return
+
+    mobiles = load_mobiles()
+    for m in mobiles:
+        if m["id_movil"] == mobile["id_movil"]:
+            m["en_jornada"] = False
+    save_mobiles(mobiles)
+
+    await update.message.reply_text("Jornada finalizada 💛", reply_markup=movil_keyboard)
+
+async def accion_pagar_jornada(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    mobile = get_mobile_by_telegram(uid)
+
+    if not mobile:
+        await update.message.reply_text("No estás vinculado.")
+        return
+
+    await update.message.reply_text(
+        "💳 *PAGO NEQUI*\n\n"
+        "Número: `3052915231`\n\n"
+        "Mensaje:\n"
+        f"`Móvil {mobile['id_movil']}`\n\n"
+        "Luego espera aprobación del administrador.",
+        parse_mode="Markdown",
+    )
+
+async def accion_estado_movil(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    mobile = get_mobile_by_telegram(uid)
+
+    if not mobile:
+        await update.message.reply_text("No estás vinculado.")
+        return
+
+    estado = "ACTIVO" if mobile.get("activo") else "INACTIVO"
+    jornada = "EN JORNADA" if mobile.get("en_jornada") else "FUERA DE JORNADA"
+
+    await update.message.reply_text(
+        f"📌 *Estado actual*\n\n"
+        f"ID: {mobile['id_movil']}\n"
+        f"Nombre: {mobile['nombre']}\n"
+        f"Vehículo: {mobile['tipo']} - {mobile['marca']}\n"
+        f"Placa: {mobile['placa']}\n"
+        f"Pago: {estado}\n"
+        f"Jornada: {jornada}\n"
+        f"Corte diario: 3:00 PM",
+        parse_mode="Markdown",
+    )
+
+# ----------------------------
 # HANDLERS
 # ----------------------------
 
@@ -149,7 +275,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Hola 💛, soy PRONTO.\nElige una opción:",
         reply_markup=main_keyboard
     )
-
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
@@ -410,7 +535,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.clear()
         return
 
-    # ---------------- SERVICIO DISCAPACITADOS (IGUAL A TRASTEOS) ----------------
+    # ---------------- SERVICIO DISCAPACITADOS ----------------
     if text == "♿ Transporte discapacitados":
         context.user_data["servicio"] = "dis_nombre"
         await update.message.reply_text("👤 ¿Cuál es tu nombre completo?")
@@ -454,121 +579,23 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Menú Móvil 🚗", reply_markup=movil_keyboard)
         return
 
-    # --- INICIAR JORNADA
-    from datetime import datetime, time
-
-# -----------------------------------
-# FUNCIÓN: DETERMINAR SI DEBE PAGAR
-# -----------------------------------
-def requiere_pago():
-    ahora = datetime.now().time()
-    hora_limite = time(15, 0)  # 3:00 pm
-    return ahora >= hora_limite  # Solo aplicar bloqueo después de las 3pm
-
-
-# -----------------------------------
-# FUNCIÓN: INICIAR JORNADA (CORREGIDA)
-# --------------------------------------
-async def iniciar_jornada(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    user_id = user.id
-
-    # Cargar móviles
-    if os.path.exists(MOBILES_FILE):
-        with open(MOBILES_FILE, "r") as f:
-            moviles = json.load(f)
-    else:
-        moviles = {}
-
-    # Validar registro
-    if str(user_id) not in moviles:
-        await update.message.reply_text("❌ No estás registrado como móvil.")
+    if text == "🟢 Iniciar jornada":
+        await accion_iniciar_jornada(update, context)
         return
 
-    movil = moviles[str(user_id)]
-    servicio = movil.get("servicio")
-
-    # ENVIAR CANAL SEGÚN SERVICIO (CORREGIDO)
-    canales = {
-        "taxi": "https://t.me/+joxg5tTv_5Y3NTkx",
-        "domicilios": "https://t.me/+sWSXu2l1wM1lMWUx",
-        "trasteos": "https://t.me/+0zFzLeA2yK1jZmUx",
-        "discapacitados": "https://t.me/+n9kZ8F8PZsJjYzAx"
-    }
-
-    if servicio in canales:
-        await update.message.reply_text(
-            f"🔗 Tu canal de trabajo es:\n{canales[servicio]}"
-        )
-    else:
-        await update.message.reply_text("⚠️ No tienes un servicio asignado.")
-        return
-
-    # Activar jornada
-    movil["jornada"] = True
-
-    # Guardar cambios
-    with open(MOBILES_FILE, "w") as f:
-        json.dump(moviles, f, indent=4)
-
-    await update.message.reply_text("✅ Jornada iniciada. Ya puedes recibir servicios.")
-
-    # --- FINALIZAR JORNADA
     if text == "🔴 Finalizar jornada":
-        mobile = get_mobile_by_telegram(uid)
-        if not mobile:
-            await update.message.reply_text("No estás vinculado.")
-            return
-
-        mobiles = load_mobiles()
-        for m in mobiles:
-            if m["id_movil"] == mobile["id_movil"]:
-                m["en_jornada"] = False
-        save_mobiles(mobiles)
-
-        await update.message.reply_text("Jornada finalizada 💛")
+        await accion_finalizar_jornada(update, context)
         return
 
-    # --- PAGO
     if text == "💳 Pagar mi jornada":
-        mobile = get_mobile_by_telegram(uid)
-        if not mobile:
-            await update.message.reply_text("No estás vinculado.")
-            return
-
-        await update.message.reply_text(
-            "💳 *PAGO NEQUI*\n\n"
-            "Número: `3052915231`\n\n"
-            "Mensaje:\n"
-            f"`Móvil {mobile['id_movil']}`\n\n"
-            "Espera aprobación del administrador.",
-            parse_mode="Markdown",
-        )
+        await accion_pagar_jornada(update, context)
         return
 
-    # --- ESTADO
     if text == "📌 Estado":
-        mobile = get_mobile_by_telegram(uid)
-        if not mobile:
-            await update.message.reply_text("No estás vinculado.")
-            return
-
-        estado = "ACTIVO" if mobile.get("activo") else "INACTIVO"
-        jornada = "EN JORNADA" if mobile.get("en_jornada") else "FUERA DE JORNADA"
-
-        await update.message.reply_text(
-            f"📌 *Estado actual*\n\n"
-            f"ID: {mobile['id_movil']}\n"
-            f"Nombre: {mobile['nombre']}\n"
-            f"Vehículo: {mobile['tipo']} - {mobile['marca']}\n"
-            f"Placa: {mobile['placa']}\n"
-            f"Pago: {estado}\n"
-            f"Jornada: {jornada}\n"
-            f"Corte diario: 3:00 PM",
-            parse_mode="Markdown",
-        )
+        await accion_estado_movil(update, context)
         return
 
+    # Si no coincide con nada:
     await update.message.reply_text("Usa el menú 💛", reply_markup=main_keyboard)
 
 # ----------------------------
