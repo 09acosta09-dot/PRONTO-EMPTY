@@ -61,7 +61,7 @@ LINK_CAMIONETAS = "https://t.me/+KRam-XSvPQ5jNjRh"  # antes Trasteos
 LINK_ESPECIAL = "https://t.me/+REkbglMlfxE3YjI5"
 
 # Número de Nequi del administrador (CÁMBIALO POR EL REAL)
-NEQUI_NUMBER = "3000000000"
+NEQUI_NUMBER = "3052915231"
 
 MOBILES_FILE = "mobiles.json"
 SERVICES_FILE = "services.json"
