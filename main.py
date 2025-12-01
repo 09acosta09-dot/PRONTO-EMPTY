@@ -35,8 +35,7 @@ from telegram.ext import (
 # ----------------------------
 
 # Toma el token de una variable de entorno BOT_TOKEN (configúrala en Railway)
-TOKEN = os.getenv("7668998247:AAECr_Y1sk6P2uOWkw6ZoJMPdmT_EBksAcA", "PON_AQUI_TU_TOKEN_SI_NO_USAS_ENV")
-
+TOKEN = os.getenv("7668998247:AAECr_Y1sk6P2uOWkw6ZoJMPdmT_EBksAcA"
 # SOLO estos IDs pueden ver el menú de administrador
 ADMIN_IDS = [1741298723, 7076796229]
 
