@@ -1,11 +1,13 @@
-# PRONTO - Versión avanzada 2.0
-# Un solo archivo - python-telegram-bot v20+
+# PRONTO - Versión 2.1 Profesional
 # - Formulario único para todos los servicios
-# - Registro de móviles con rangos de 30 (PXXX) y luego T/D/C/E + numeración continua
+# - Registro de móviles SOLO por administrador (con datos completos)
+# - Rangos de 30 móviles por servicio (PXXX), luego T/D/C/E + número continuo
 # - Asignación del servicio al móvil más cercano (GPS)
 # - Botón "Reservar servicio" y mensaje al cliente con el código del móvil
+# - Menú de administrador completo (registrar móviles, ver móviles, desactivar, aprobar pagos, ver servicios)
 # - Cambio "Trasteos" -> "Camionetas"
 # - Hora correcta de Colombia
+# - Listo para python-telegram-bot v20+
 
 import os
 import json
@@ -32,11 +34,13 @@ from telegram.ext import (
 # CONFIGURACIÓN
 # ----------------------------
 
-TOKEN = "7668998247:AAECr_Y1sk6P2uOWkw6ZoJMPdmT_EBksAcA"  
+# Toma el token de una variable de entorno BOT_TOKEN (configúrala en Railway)
+TOKEN = os.getenv("7668998247:AAECr_Y1sk6P2uOWkw6ZoJMPdmT_EBksAcA", "PON_AQUI_TU_TOKEN_SI_NO_USAS_ENV")
 
+# SOLO estos IDs pueden ver el menú de administrador
 ADMIN_IDS = [1741298723, 7076796229]
 
-# Canales por servicio (si quieres que el admin vea los movimientos)
+# Canales por servicio (para control del admin)
 CHANNEL_TAXI = -1002697357566
 CHANNEL_DOMICILIOS = -1002503403579
 CHANNEL_CAMIONETAS = -1002662309590
@@ -166,9 +170,20 @@ user_service_keyboard = ReplyKeyboardMarkup(
 
 movil_menu_keyboard = ReplyKeyboardMarkup(
     [
-        [KeyboardButton("📲 Registrarme como móvil")],
         [KeyboardButton("📍 Enviar ubicación actual")],
         [KeyboardButton("🔚 Finalizar jornada")],
+        [KeyboardButton("⬅ Volver al inicio")],
+    ],
+    resize_keyboard=True,
+)
+
+admin_keyboard = ReplyKeyboardMarkup(
+    [
+        [KeyboardButton("📲 Registrar móvil")],
+        [KeyboardButton("🚗 Ver móviles registrados")],
+        [KeyboardButton("🗑 Desactivar móvil")],
+        [KeyboardButton("💰 Aprobar pagos")],
+        [KeyboardButton("📋 Ver servicios activos")],
         [KeyboardButton("⬅ Volver al inicio")],
     ],
     resize_keyboard=True,
@@ -192,14 +207,15 @@ movil_service_keyboard = ReplyKeyboardMarkup(
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
-    await update.message.reply_text(
-        "👋 Bienvenido a PRONTO.\n\nElige una opción:",
-        reply_markup=main_keyboard,
-    )
+    if update.message:
+        await update.message.reply_text(
+            "👋 Bienvenido a PRONTO.\n\nElige una opción:",
+            reply_markup=main_keyboard,
+        )
 
 
 # ----------------------------
-# REGISTRO DE MÓVILES Y CÓDIGOS
+# ASIGNACIÓN DE CÓDIGOS PARA MÓVILES
 # ----------------------------
 
 def parse_code_number(codigo: str) -> int | None:
@@ -218,7 +234,7 @@ def asignar_codigo_movil(servicio: str) -> str:
     """
     Asigna código al móvil según las reglas:
     - Cada servicio tiene 30 cupos iniciales con PXXX dentro de un rango específico.
-    - Ej: Taxi: P001-P030, Domicilios: P031-P060, Camionetas: P061-P090, Especial: P091-P120
+    - Taxi: P001-P030, Domicilios: P031-P060, Camionetas: P061-P090, Especial: P091-P120
     - Si ya se llenaron los 30 cupos de ese servicio con PXXX, se usa:
         TXXX, DXXX, CXXX o EXXX
       donde XXX es el número que sigue después del mayor número usado (mínimo 121).
@@ -245,7 +261,6 @@ def asignar_codigo_movil(servicio: str) -> str:
 
     # Si aún hay espacio en los 30 iniciales
     if count_P < 30:
-        # Buscar el número disponible dentro del rango
         for posible_num in range(base_start, base_end + 1):
             if posible_num not in used_numbers_in_range:
                 return f"P{posible_num:03d}"
@@ -255,47 +270,6 @@ def asignar_codigo_movil(servicio: str) -> str:
     siguiente = max(max_num + 1, 121)
     prefijo = info["prefix_overflow"]
     return f"{prefijo}{siguiente:03d}"
-
-
-async def registrar_movil(update: Update, context: ContextTypes.DEFAULT_TYPE, servicio: str):
-    user = update.effective_user
-    user_id_str = str(user.id)
-    mobiles = get_mobiles()
-
-    if user_id_str in mobiles:
-        # Ya existe, solo actualizar servicio
-        mobiles[user_id_str]["servicio"] = servicio
-        codigo = mobiles[user_id_str]["codigo"]
-        save_mobiles(mobiles)
-        await update.message.reply_text(
-            f"✅ Ya estabas registrado.\n\n"
-            f"Ahora quedas asignado al servicio: *{servicio}*\n"
-            f"Tu código de móvil es: *{codigo}*.\n\n"
-            "Ahora envía tu ubicación con el botón '📍 Enviar ubicación actual' para quedar disponible.",
-            parse_mode="Markdown",
-            reply_markup=movil_menu_keyboard,
-        )
-        return
-
-    # Asignar código nuevo
-    codigo = asignar_codigo_movil(servicio)
-    mobiles[user_id_str] = {
-        "codigo": codigo,
-        "servicio": servicio,
-        "lat": None,
-        "lon": None,
-        "activo": False,
-        "nombre": user.full_name,
-    }
-    save_mobiles(mobiles)
-
-    await update.message.reply_text(
-        f"✅ Te has registrado como móvil de *{servicio}*.\n\n"
-        f"Tu código de móvil es: *{codigo}*.\n\n"
-        "Ahora envía tu ubicación con el botón '📍 Enviar ubicación actual' para quedar disponible.",
-        parse_mode="Markdown",
-        reply_markup=movil_menu_keyboard,
-    )
 
 
 # ----------------------------
@@ -316,14 +290,13 @@ async def handle_usuario_service_choice(update: Update, context: ContextTypes.DE
     context.user_data["step"] = "ask_name"
     context.user_data["servicio"] = servicio
     context.user_data["data"] = {}
-
     await update.message.reply_text(
         "📝 Por favor escribe tu *nombre completo*:",
         parse_mode="Markdown",
     )
 
 
-async def location_keyboard():
+def build_location_keyboard():
     kb = ReplyKeyboardMarkup(
         [
             [KeyboardButton("📍 Enviar ubicación", request_location=True)],
@@ -337,8 +310,8 @@ async def location_keyboard():
 
 async def finalize_user_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Cuando ya tenemos todos los datos del usuario (nombre, tel, ubicación opcional, destino, carga) se crea
-    el servicio, se busca el móvil más cercano y se envía el servicio.
+    Cuando ya tenemos todos los datos del usuario se crea el servicio,
+    se busca el móvil más cercano y se envía el servicio.
     """
     user = update.effective_user
     chat_id = update.effective_chat.id
@@ -356,10 +329,9 @@ async def finalize_user_request(update: Update, context: ContextTypes.DEFAULT_TY
     data["user_chat_id"] = chat_id
     data["user_id"] = user.id
 
-    # Guardar servicio y asignar a móvil
+    # Guardar servicio y asignar ID
     services = get_services()
 
-    # Crear ID de servicio S00001, S00002, etc.
     existing_ids = [s.get("id") for s in services.values()]
     all_nums = []
     for sid in existing_ids:
@@ -428,7 +400,7 @@ async def finalize_user_request(update: Update, context: ContextTypes.DEFAULT_TY
         ]
     )
 
-    application = ApplicationBuilder().token(TOKEN).build()  # solo para obtener el bot en modo async
+    application = ApplicationBuilder().token(TOKEN).build()
     bot = application.bot
 
     try:
@@ -439,13 +411,12 @@ async def finalize_user_request(update: Update, context: ContextTypes.DEFAULT_TY
             parse_mode="Markdown",
         )
     except Exception:
-        # Si por alguna razón no se puede enviar al móvil
         await update.message.reply_text(
             "Hubo un problema notificando al móvil. Intenta de nuevo más tarde."
         )
         return
 
-    # Enviar también resumen al canal correspondiente (para control del admin)
+    # Enviar también resumen al canal correspondiente
     channel_id = SERVICE_INFO[movil_servicio]["channel_id"]
     resumen_canal = (
         f"📢 *Nuevo servicio de {movil_servicio}*\n"
@@ -462,7 +433,7 @@ async def finalize_user_request(update: Update, context: ContextTypes.DEFAULT_TY
             parse_mode="Markdown",
         )
     except Exception:
-        pass  # No es crítico si falla
+        pass
 
     # Limpiar estado de usuario
     context.user_data.clear()
@@ -470,14 +441,16 @@ async def finalize_user_request(update: Update, context: ContextTypes.DEFAULT_TY
 
 def seleccionar_movil_mas_cercano(servicio: str, lat_cliente, lon_cliente):
     """
-    Selecciona el móvil más cercano que esté activo y tenga el mismo tipo de servicio.
-    Si el cliente no envía ubicación, simplemente toma cualquiera activo.
+    Selecciona el móvil más cercano que esté activo, con pago aprobado,
+    y tenga el mismo tipo de servicio.
     """
     mobiles = get_mobiles()
     candidatos = []
 
     for chat_id_str, m in mobiles.items():
         if not m.get("activo"):
+            continue
+        if not m.get("pago_aprobado"):
             continue
         if m.get("servicio") != servicio:
             continue
@@ -489,7 +462,7 @@ def seleccionar_movil_mas_cercano(servicio: str, lat_cliente, lon_cliente):
         if lat_cliente is not None and lon_cliente is not None:
             dist = haversine_distance(lat_cliente, lon_cliente, m_lat, m_lon)
         else:
-            dist = 0.0  # si no hay ubicación del cliente, no calculamos distancia real
+            dist = 0.0
 
         candidatos.append(
             {
@@ -503,13 +476,12 @@ def seleccionar_movil_mas_cercano(servicio: str, lat_cliente, lon_cliente):
     if not candidatos:
         return None
 
-    # Ordenar por distancia
     candidatos.sort(key=lambda x: x["distancia"])
     return candidatos[0]
 
 
 # ----------------------------
-# CALLBACK RESERVAR SERVICIO
+# CALLBACKS (RESERVA Y PAGOS)
 # ----------------------------
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -517,6 +489,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
 
+    # Reservar servicio
     if data.startswith("RESERVAR|"):
         service_id = data.split("|", 1)[1]
         user = query.from_user
@@ -541,7 +514,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        # Verificar que el móvil que presiona sea el asignado
         movil_chat_id = servicio_data.get("movil_chat_id")
         movil_codigo = servicio_data.get("movil_codigo")
         if movil_chat_id != chat_id:
@@ -550,13 +522,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        # Marcar como reservado
         servicio_data["status"] = "reservado"
         servicio_data["hora_reserva"] = now_colombia_str()
         services[servicio_data["id"]] = servicio_data
         save_services(services)
 
-        # Mensaje al móvil
         texto_movil = (
             f"✅ Has *reservado* el servicio {service_id}.\n\n"
             f"Dirígete al cliente:\n"
@@ -613,9 +583,62 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
+        return
+
+    # Aprobar pago
+    if data.startswith("APROBAR_PAGO|"):
+        codigo = data.split("|", 1)[1]
+        mobiles = get_mobiles()
+        target_key = None
+        for chat_id_str, m in mobiles.items():
+            if m.get("codigo", "").upper() == codigo.upper():
+                target_key = chat_id_str
+                break
+
+        if not target_key:
+            await query.edit_message_text("No encontré ese móvil. Es posible que haya sido eliminado.")
+            return
+
+        mobiles[target_key]["pago_aprobado"] = True
+        save_mobiles(mobiles)
+
+        # Mensaje al admin
+        await query.edit_message_text(
+            f"✅ El pago del móvil *{codigo}* ha sido aprobado.",
+            parse_mode="Markdown",
+        )
+
+        # Mensaje al móvil
+        application = ApplicationBuilder().token(TOKEN).build()
+        bot = application.bot
+        try:
+            await bot.send_message(
+                chat_id=int(target_key),
+                text=(
+                    "💰 Tu pago ha sido *aprobado*.\n\n"
+                    "Ya puedes enviar tu ubicación para iniciar jornada "
+                    "y recibir servicios."
+                ),
+                parse_mode="Markdown",
+            )
+        except Exception:
+            pass
+
+        # Limpiar estado de aprobación
+        if "pending_payment_code" in context.user_data:
+            del context.user_data["pending_payment_code"]
+
+        return
+
+    if data.startswith("CANCELAR_PAGO|"):
+        await query.edit_message_text("Operación cancelada.")
+        if "pending_payment_code" in context.user_data:
+            del context.user_data["pending_payment_code"]
+        return
+
 
 # ----------------------------
-# MANEJO DE TEXTO GENERAL
+# MANEJO DE TEXTO
 # ----------------------------
 
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -624,6 +647,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text.strip()
     user = update.effective_user
+    user_id = user.id
 
     # Volver al inicio
     if text == "⬅ Volver al inicio":
@@ -639,26 +663,28 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_usuario_option(update, context)
         return
 
-    # Modo Móvil
+    # Entrar como Móvil
     if text == "Móvil":
         context.user_data["mode"] = "movil"
         await update.message.reply_text(
-            "Menú de móviles. Elige una opción:",
+            "Menú de móviles.\n\n"
+            "Si ya estás registrado por el administrador, envía tu ubicación para iniciar jornada.",
             reply_markup=movil_menu_keyboard,
         )
         return
 
-    # Modo Administrador (simple por ahora)
+    # Entrar como Administrador
     if text == "Administrador":
+        if user_id not in ADMIN_IDS:
+            await update.message.reply_text(
+                "❌ No tienes permisos para acceder al panel de administración."
+            )
+            return
         context.user_data["mode"] = "admin"
-        mobiles = get_mobiles()
-        activos = [m for m in mobiles.values() if m.get("activo")]
+        context.user_data["admin_step"] = None
         await update.message.reply_text(
-            f"👮 Panel administrador básico:\n\n"
-            f"📱 Móviles registrados: {len(mobiles)}\n"
-            f"✅ Móviles activos ahora: {len(activos)}\n\n"
-            "En próximas versiones se ampliarán más funciones para administrador.",
-            reply_markup=main_keyboard,
+            "👮 Panel de administración.\n\nElige una opción:",
+            reply_markup=admin_keyboard,
         )
         return
 
@@ -666,14 +692,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ------------------- MÓVIL -------------------
     if mode == "movil":
-        if text == "📲 Registrarme como móvil":
-            context.user_data["movil_step"] = "ask_service"
-            await update.message.reply_text(
-                "¿Para qué servicio trabajas?",
-                reply_markup=movil_service_keyboard,
-            )
-            return
-
         if text == "📍 Enviar ubicación actual":
             await update.message.reply_text(
                 "Por favor comparte tu ubicación desde Telegram (icono del clip ➜ Ubicación) "
@@ -693,7 +711,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             else:
                 await update.message.reply_text(
-                    "No estás registrado como móvil todavía.",
+                    "No estás registrado como móvil. Pide al administrador que te registre.",
                     reply_markup=movil_menu_keyboard,
                 )
             return
@@ -706,26 +724,288 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        # Respuesta al paso de elegir servicio
-        if context.user_data.get("movil_step") == "ask_service":
-            if text in ["Taxi", "Domicilios", "Camionetas", "Especial"]:
-                await registrar_movil(update, context, servicio=text)
-                context.user_data["movil_step"] = None
+    # ------------------- ADMINISTRADOR -------------------
+    if mode == "admin" and user_id in ADMIN_IDS:
+        admin_step = context.user_data.get("admin_step")
+
+        # Opciones principales del menú admin
+        if text == "📲 Registrar móvil":
+            context.user_data["admin_step"] = "reg_name"
+            context.user_data["reg_movil"] = {}
+            await update.message.reply_text(
+                "📲 Registro de móvil.\n\n"
+                "Escribe el *nombre completo* del conductor:",
+                parse_mode="Markdown",
+            )
+            return
+
+        if text == "🚗 Ver móviles registrados":
+            mobiles = get_mobiles()
+            if not mobiles:
+                await update.message.reply_text("No hay móviles registrados todavía.")
                 return
-            else:
+            lines = ["📋 *Móviles registrados:*"]
+            for m in mobiles.values():
+                codigo = m.get("codigo", "SIN-COD")
+                nombre = m.get("nombre", "Sin nombre")
+                servicio = m.get("servicio", "Sin servicio")
+                activo = "✅ Activo" if m.get("activo") else "⛔ Inactivo"
+                pago = "💰 Pago OK" if m.get("pago_aprobado") else "💸 Pendiente"
+                lines.append(f"- {codigo} – {nombre} – {servicio} – {activo} – {pago}")
+            msg = "\n".join(lines)
+            await update.message.reply_text(msg, parse_mode="Markdown")
+            return
+
+        if text == "🗑 Desactivar móvil":
+            context.user_data["admin_step"] = "deactivate_code"
+            await update.message.reply_text(
+                "Escribe el *código del móvil* que deseas desactivar (ej: P001, T121, C090):",
+                parse_mode="Markdown",
+            )
+            return
+
+        if text == "💰 Aprobar pagos":
+            context.user_data["admin_step"] = "approve_payment_code"
+            await update.message.reply_text(
+                "Escribe el *código del móvil* cuyo pago deseas aprobar (ej: P001, T121, C090):",
+                parse_mode="Markdown",
+            )
+            return
+
+        if text == "📋 Ver servicios activos":
+            services = get_services()
+            activos = [
+                s for s in services.values()
+                if s.get("status") in ["pendiente", "reservado"]
+            ]
+            if not activos:
+                await update.message.reply_text("No hay servicios activos en este momento.")
+                return
+            lines = ["📋 *Servicios activos:*"]
+            for s in activos:
+                sid = s.get("id", "")
+                serv = s.get("servicio", "")
+                nombre = s.get("nombre", "")
+                destino = s.get("destino", "")
+                status = s.get("status", "")
+                movil = s.get("movil_codigo", "SIN MÓVIL")
+                lines.append(f"- {sid} – {serv} – {nombre} – Destino: {destino} – Estado: {status} – Móvil: {movil}")
+            await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+            return
+
+        # Flujo de registro de móviles (admin_step)
+        if admin_step == "reg_name":
+            context.user_data["reg_movil"]["nombre"] = text
+            context.user_data["admin_step"] = "reg_cedula"
+            await update.message.reply_text(
+                "✍ Ahora escribe la *cédula* del conductor:",
+                parse_mode="Markdown",
+            )
+            return
+
+        if admin_step == "reg_cedula":
+            context.user_data["reg_movil"]["cedula"] = text
+            context.user_data["admin_step"] = "reg_service"
+            await update.message.reply_text(
+                "🚗 Indica el *tipo de servicio* del móvil:\n"
+                "- Taxi\n- Domicilios\n- Camionetas\n- Especial\n\n"
+                "Escríbelo tal cual.",
+                parse_mode="Markdown",
+            )
+            return
+
+        if admin_step == "reg_service":
+            servicio = text.strip()
+            if servicio not in ["Taxi", "Domicilios", "Camionetas", "Especial"]:
                 await update.message.reply_text(
-                    "Por favor elige una opción válida de servicio.",
-                    reply_markup=movil_service_keyboard,
+                    "Servicio no válido. Escribe: Taxi, Domicilios, Camionetas o Especial."
                 )
                 return
+            context.user_data["reg_movil"]["servicio"] = servicio
+            context.user_data["admin_step"] = "reg_placa"
+            await update.message.reply_text(
+                "🚘 Escribe la *placa* del vehículo:",
+                parse_mode="Markdown",
+            )
+            return
+
+        if admin_step == "reg_placa":
+            context.user_data["reg_movil"]["placa"] = text
+            context.user_data["admin_step"] = "reg_marca"
+            await update.message.reply_text(
+                "🚘 Escribe la *marca* del vehículo:",
+                parse_mode="Markdown",
+            )
+            return
+
+        if admin_step == "reg_marca":
+            context.user_data["reg_movil"]["marca"] = text
+            context.user_data["admin_step"] = "reg_modelo"
+            await update.message.reply_text(
+                "🚘 Escribe el *modelo* del vehículo (ej: 2015):",
+                parse_mode="Markdown",
+            )
+            return
+
+        if admin_step == "reg_modelo":
+            context.user_data["reg_movil"]["modelo"] = text
+            context.user_data["admin_step"] = "reg_chatid"
+            await update.message.reply_text(
+                "📲 Ahora escribe el *chat ID* del conductor (número que te envía él):",
+                parse_mode="Markdown",
+            )
+            return
+
+        if admin_step == "reg_chatid":
+            reg = context.user_data.get("reg_movil", {})
+            try:
+                chat_id_movil = int(text)
+            except ValueError:
+                await update.message.reply_text(
+                    "El chat ID debe ser un número. Pide al conductor que te lo envíe correctamente."
+                )
+                return
+
+            servicio = reg.get("servicio")
+            if not servicio:
+                await update.message.reply_text("Error interno: servicio no definido. Vuelve a intentar registrar.")
+                context.user_data["admin_step"] = None
+                return
+
+            codigo = asignar_codigo_movil(servicio)
+            mobiles = get_mobiles()
+            mobiles[str(chat_id_movil)] = {
+                "codigo": codigo,
+                "servicio": servicio,
+                "lat": None,
+                "lon": None,
+                "activo": False,
+                "nombre": reg.get("nombre", ""),
+                "cedula": reg.get("cedula", ""),
+                "placa": reg.get("placa", ""),
+                "marca": reg.get("marca", ""),
+                "modelo": reg.get("modelo", ""),
+                "pago_aprobado": False,
+            }
+            save_mobiles(mobiles)
+
+            context.user_data["admin_step"] = None
+            context.user_data["reg_movil"] = {}
+
+            await update.message.reply_text(
+                f"✅ Móvil registrado correctamente.\n\n"
+                f"Conductor: *{mobiles[str(chat_id_movil)]['nombre']}*\n"
+                f"Servicio: *{servicio}*\n"
+                f"Código asignado: *{codigo}*\n\n"
+                f"Debe enviar su ubicación desde el menú 'Móvil' para iniciar jornada "
+                f"(y una vez le apruebes el pago).",
+                parse_mode="Markdown",
+            )
+            return
+
+        # Flujo desactivar móvil
+        if admin_step == "deactivate_code":
+            codigo = text.strip().upper()
+            mobiles = get_mobiles()
+            target_key = None
+            for chat_id_str, m in mobiles.items():
+                if m.get("codigo", "").upper() == codigo:
+                    target_key = chat_id_str
+                    break
+
+            if not target_key:
+                await update.message.reply_text(
+                    "No encontré un móvil con ese código. Verifica y vuelve a intentarlo."
+                )
+                return
+
+            mobiles[target_key]["activo"] = False
+            save_mobiles(mobiles)
+            context.user_data["admin_step"] = None
+
+            await update.message.reply_text(
+                f"🛑 El móvil *{codigo}* ha sido desactivado.",
+                parse_mode="Markdown",
+            )
+            return
+
+        # Flujo aprobar pagos (pedir código)
+        if admin_step == "approve_payment_code":
+            codigo = text.strip().upper()
+            mobiles = get_mobiles()
+            target = None
+            target_key = None
+            for chat_id_str, m in mobiles.items():
+                if m.get("codigo", "").upper() == codigo:
+                    target = m
+                    target_key = chat_id_str
+                    break
+
+            if not target:
+                await update.message.reply_text(
+                    "No encontré un móvil con ese código. Verifica y vuelve a intentarlo."
+                )
+                return
+
+            context.user_data["pending_payment_code"] = codigo
+
+            nombre = target.get("nombre", "Sin nombre")
+            servicio = target.get("servicio", "Sin servicio")
+            cedula = target.get("cedula", "Sin cédula")
+            placa = target.get("placa", "Sin placa")
+            marca = target.get("marca", "Sin marca")
+            modelo = target.get("modelo", "Sin modelo")
+            pago = "💰 Pago OK" if target.get("pago_aprobado") else "💸 Pendiente"
+
+            texto = (
+                "📋 *Información del móvil:*\n\n"
+                f"🔢 Código: *{codigo}*\n"
+                f"👤 Nombre: *{nombre}*\n"
+                f"🧾 Cédula: *{cedula}*\n"
+                f"🚗 Servicio: *{servicio}*\n"
+                f"🚘 Placa: *{placa}*\n"
+                f"🚘 Marca: *{marca}*\n"
+                f"🚘 Modelo: *{modelo}*\n"
+                f"💸 Estado de pago: {pago}\n\n"
+                "¿Deseas *aprobar el pago* de este móvil?"
+            )
+
+            keyboard = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(
+                            "✅ Aprobar pago", callback_data=f"APROBAR_PAGO|{codigo}"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            "❌ Cancelar", callback_data=f"CANCELAR_PAGO|{codigo}"
+                        )
+                    ],
+                ]
+            )
+
+            await update.message.reply_text(
+                texto,
+                parse_mode="Markdown",
+                reply_markup=keyboard,
+            )
+
+            # No cambiamos admin_step aún, pero podrías ponerlo en None si quieres
+            return
+
+        # Texto cualquiera en modo admin sin step
+        await update.message.reply_text(
+            "Usa las opciones del menú de administrador, por favor.",
+            reply_markup=admin_keyboard,
+        )
+        return
 
     # ------------------- USUARIO -------------------
     if mode == "usuario":
         step = context.user_data.get("step")
 
-        # Elegir servicio
         if step == "choose_service":
-            # Comparar con las etiquetas de usuario
             for servicio, info in SERVICE_INFO.items():
                 if text == info["label_user"]:
                     await handle_usuario_service_choice(update, context, servicio)
@@ -743,7 +1023,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        # Nombre
         if step == "ask_name":
             context.user_data.setdefault("data", {})["nombre"] = text
             context.user_data["step"] = "ask_phone"
@@ -753,24 +1032,20 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        # Teléfono
         if step == "ask_phone":
             context.user_data["data"]["telefono"] = text
             context.user_data["step"] = "ask_location"
-            kb = await location_keyboard()
+            kb = build_location_keyboard()
             await update.message.reply_text(
                 "📍 Comparte tu ubicación GPS con el botón o escribe tu dirección actual:",
                 reply_markup=kb,
             )
             return
 
-        # Ubicación (si la escribe en texto)
         if step == "ask_location":
-            # El usuario escribió algo como dirección
             context.user_data["data"]["direccion_texto"] = text
             context.user_data["data"]["lat"] = None
             context.user_data["data"]["lon"] = None
-
             context.user_data["step"] = "ask_destination"
             await update.message.reply_text(
                 "📍 Ahora escribe el *destino o dirección* a donde necesitas ir o enviar:",
@@ -778,7 +1053,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        # Destino
         if step == "ask_destination":
             context.user_data["data"]["destino"] = text
             servicio = context.user_data.get("servicio")
@@ -790,17 +1064,15 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
             else:
-                # Finalizar para servicios normales
                 await finalize_user_request(update, context)
                 return
 
-        # Tipo de carga (solo Camionetas)
         if step == "ask_carga":
             context.user_data["data"]["carga"] = text
             await finalize_user_request(update, context)
             return
 
-    # Si nada de lo anterior coincide
+    # Si nada coincide
     await update.message.reply_text(
         "No entiendo ese mensaje. Por favor usa el menú en pantalla."
     )
@@ -820,12 +1092,11 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mode = context.user_data.get("mode")
     step = context.user_data.get("step")
 
-    # 1) Caso usuario enviando ubicación en el flujo de solicitud
+    # 1) Usuario enviando ubicación en el flujo
     if mode == "usuario" and step == "ask_location":
         context.user_data["data"]["lat"] = loc.latitude
         context.user_data["data"]["lon"] = loc.longitude
         context.user_data["data"]["direccion_texto"] = None
-
         context.user_data["step"] = "ask_destination"
         await update.message.reply_text(
             "✅ Ubicación recibida.\n\n"
@@ -834,9 +1105,17 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # 2) Caso móvil enviando ubicación para iniciar jornada
+    # 2) Móvil enviando ubicación para iniciar jornada
     mobiles = get_mobiles()
     if user_id_str in mobiles:
+        # Verificar pago
+        if not mobiles[user_id_str].get("pago_aprobado", False):
+            await update.message.reply_text(
+                "💸 Tu pago aún no ha sido aprobado por el administrador.\n"
+                "Habla con el administrador para que apruebe tu pago y luego envía de nuevo tu ubicación."
+            )
+            return
+
         mobiles[user_id_str]["lat"] = loc.latitude
         mobiles[user_id_str]["lon"] = loc.longitude
         mobiles[user_id_str]["activo"] = True
@@ -855,11 +1134,11 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # 3) Usuario que manda ubicación sin estar en flujo ni ser móvil
+    # 3) Usuario o móvil no registrado
     await update.message.reply_text(
         "He recibido tu ubicación, pero no sé en qué contexto usarla.\n\n"
         "Si eres cliente, usa la opción 'Usuario'.\n"
-        "Si eres móvil, primero regístrate en el menú 'Móvil'."
+        "Si eres móvil, pide al administrador que te registre en el sistema."
     )
 
 
