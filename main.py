@@ -1,4 +1,4 @@
-# PRONTO - Versión 2.2 Profesional (Webhook para Railway)
+# PRONTO - Versión 2.3 Profesional (Webhook para Railway)
 # - Webhook en Railway usando python-telegram-bot v20+
 # - Token tomado desde variable de entorno BOT_TOKEN
 # - Menú Usuario / Móvil / Administrador
@@ -13,6 +13,7 @@
 # - Pueden trabajar sin restricción antes de las 3:00 p.m.
 # - Después de las 3:00 p.m. se exige pago aprobado para iniciar jornada y recibir servicios
 # - Cambio "Trasteos" -> "Camionetas"
+# - Comando /soy_movil para que el conductor envíe su solicitud de registro (chat_id automático)
 # - Hora correcta de Colombia
 
 import os
@@ -229,6 +230,58 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "👋 Bienvenido a PRONTO.\n\nElige una opción:",
             reply_markup=main_keyboard,
         )
+
+
+# ----------------------------
+# /soy_movil - solicitud de registro del conductor
+# ----------------------------
+
+async def soy_movil_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """El conductor envía /soy_movil y se notifica a los administradores con su chat_id."""
+    user = update.effective_user
+    chat_id = update.effective_chat.id
+
+    # Mensaje para el conductor
+    await update.message.reply_text(
+        "Perfecto 🚗✨\n"
+        "Tu solicitud fue enviada.\n"
+        "El administrador te registrará pronto para que puedas empezar a trabajar."
+    )
+
+    # Notificar a los administradores
+    nombre = user.full_name or "Sin nombre"
+    username = f"@{user.username}" if user.username else "Sin username"
+
+    texto_admin = (
+        "📲 *Nuevo conductor quiere registrarse*\n\n"
+        f"👤 Nombre de perfil: *{nombre}*\n"
+        f"🔗 Usuario: {username}\n"
+        f"💬 Chat ID: `{chat_id}`\n\n"
+        "¿Deseas iniciar el registro de este móvil ahora?"
+    )
+
+    keyboard = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "📝 Iniciar registro",
+                    callback_data=f"REG_MOVIL|{chat_id}",
+                )
+            ]
+        ]
+    )
+
+    for admin_id in ADMIN_IDS:
+        try:
+            await context.bot.send_message(
+                chat_id=admin_id,
+                text=texto_admin,
+                parse_mode="Markdown",
+                reply_markup=keyboard,
+            )
+        except Exception:
+            # Si algún admin no se puede notificar, se ignora para no romper el flujo
+            pass
 
 
 # ----------------------------
@@ -463,7 +516,7 @@ def seleccionar_movil_mas_cercano(servicio: str, lat_cliente, lon_cliente):
 
 
 # ----------------------------
-# CALLBACKS (RESERVA Y PAGOS)
+# CALLBACKS (RESERVA, PAGOS, REG_MOVIL)
 # ----------------------------
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -472,6 +525,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     bot = context.bot
 
+    # Reservar servicio por parte del móvil
     if data.startswith("RESERVAR|"):
         service_id = data.split("|", 1)[1]
         chat_id = query.message.chat.id
@@ -560,6 +614,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return
 
+    # Aprobar pago de un móvil
     if data.startswith("APROBAR_PAGO|"):
         codigo = data.split("|", 1)[1]
         mobiles = get_mobiles()
@@ -587,7 +642,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text=(
                     "💰 Tu pago ha sido *aprobado*.\n\n"
                     "Ya puedes iniciar jornada desde el menú de Móvil "
-                    "y recibir servicios."
+                    "y recibir servicios, incluso después de las 3:00 p.m."
                 ),
                 parse_mode="Markdown",
             )
@@ -603,6 +658,21 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Operación cancelada.")
         if "pending_payment_code" in context.user_data:
             del context.user_data["pending_payment_code"]
+        return
+
+    # Iniciar registro de móvil desde /soy_movil (REG_MOVIL)
+    if data.startswith("REG_MOVIL|"):
+        chat_id_movil_str = data.split("|", 1)[1].strip()
+        # Iniciamos flujo de registro usando ese chat_id
+        context.user_data["mode"] = "admin"
+        context.user_data["admin_step"] = "reg_name"
+        context.user_data["reg_movil"] = {"chat_id": chat_id_movil_str}
+
+        await query.edit_message_text(
+            "📝 Vamos a registrar este móvil.\n\n"
+            "Por favor escribe el *nombre completo* del conductor:",
+            parse_mode="Markdown",
+        )
         return
 
 
@@ -671,7 +741,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not m:
                 await update.message.reply_text(
                     "❌ No estás registrado como móvil en el sistema.\n"
-                    "Por favor comunícate con el administrador."
+                    "Por favor comunícate con el administrador.",
                 )
                 context.user_data.clear()
                 await update.message.reply_text(
@@ -867,7 +937,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data["reg_movil"]["nombre"] = text
             context.user_data["admin_step"] = "reg_cedula"
             await update.message.reply_text(
-                "✍ Ahora escribe la *cédula* del conductor:",
+                "✍ Ahora escribe la *cedula* del conductor:",
                 parse_mode="Markdown",
             )
             return
@@ -918,6 +988,58 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if admin_step == "reg_modelo":
             context.user_data["reg_movil"]["modelo"] = text
+            reg = context.user_data.get("reg_movil", {})
+            # Si el chat_id ya viene desde /soy_movil, terminamos aquí
+            if "chat_id" in reg and reg["chat_id"]:
+                try:
+                    chat_id_movil = int(reg["chat_id"])
+                except ValueError:
+                    await update.message.reply_text(
+                        "Error interno con el chat_id del móvil. Vuelve a intentar el registro.",
+                    )
+                    context.user_data["admin_step"] = None
+                    return
+
+                servicio = reg.get("servicio")
+                if not servicio:
+                    await update.message.reply_text(
+                        "Error interno: servicio no definido. Vuelve a intentar registrar."
+                    )
+                    context.user_data["admin_step"] = None
+                    return
+
+                codigo = asignar_codigo_movil(servicio)
+                mobiles = get_mobiles()
+                mobiles[str(chat_id_movil)] = {
+                    "codigo": codigo,
+                    "servicio": servicio,
+                    "lat": None,
+                    "lon": None,
+                    "activo": False,
+                    "nombre": reg.get("nombre", ""),
+                    "cedula": reg.get("cedula", ""),
+                    "placa": reg.get("placa", ""),
+                    "marca": reg.get("marca", ""),
+                    "modelo": reg.get("modelo", ""),
+                    "pago_aprobado": False,
+                }
+                save_mobiles(mobiles)
+
+                context.user_data["admin_step"] = None
+                context.user_data["reg_movil"] = {}
+
+                await update.message.reply_text(
+                    f"✅ Móvil registrado correctamente.\n\n"
+                    f"Conductor: *{mobiles[str(chat_id_movil)]['nombre']}*\n"
+                    f"Servicio: *{servicio}*\n"
+                    f"Código asignado: *{codigo}*\n\n"
+                    f"El conductor debe entrar al bot, elegir 'Móvil' y autenticarse con este código.\n"
+                    f"Luego podrá iniciar jornada, compartir ubicación y enviar pago.",
+                    parse_mode="Markdown",
+                )
+                return
+
+            # Si NO vino de /soy_movil, pedimos el chat_id manual
             context.user_data["admin_step"] = "reg_chatid"
             await update.message.reply_text(
                 "📲 Ahora escribe el *chat ID* del conductor (número que te envía él):",
@@ -1202,6 +1324,7 @@ def main():
     application = ApplicationBuilder().token(TOKEN).build()
 
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("soy_movil", soy_movil_command))
     application.add_handler(CallbackQueryHandler(button_callback))
     application.add_handler(MessageHandler(filters.LOCATION, location_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
