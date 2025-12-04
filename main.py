@@ -472,47 +472,59 @@ async def finalize_user_request(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 def seleccionar_movil_mas_cercano(servicio: str, lat_cliente, lon_cliente):
-    """
-    Selecciona el móvil más cercano que esté activo y,
-    después de las 3 p.m., con pago aprobado.
-    """
     mobiles = get_mobiles()
     candidatos = []
     corte = after_cutoff()
 
     for chat_id_str, m in mobiles.items():
+
+        # 1️⃣ Debe estar activo
         if not m.get("activo"):
             continue
+
+        # 2️⃣ Debe ser del servicio correcto
         if m.get("servicio") != servicio:
             continue
+
+        # 3️⃣ Después de las 3pm solo con pago aprobado
         if corte and not m.get("pago_aprobado"):
-            # Después de las 3 p.m., solo móviles con pago aprobado
             continue
 
+        # 4️⃣ Validar ubicación REAL del móvil
         m_lat = m.get("lat")
         m_lon = m.get("lon")
+
         if m_lat is None or m_lon is None:
-            continue
-
-        if lat_cliente is not None and lon_cliente is not None:
-            dist = haversine_distance(lat_cliente, lon_cliente, m_lat, m_lon)
+            # Distancia infinita (NO 0)
+            dist = float("inf")
         else:
-            dist = 0.0
+            # Si el cliente no envió ubicación, distancia infinita
+            if lat_cliente is not None and lon_cliente is not None:
+                dist = haversine_distance(lat_cliente, lon_cliente, m_lat, m_lon)
+            else:
+                dist = float("inf")
 
-        candidatos.append(
-            {
-                "chat_id": int(chat_id_str),
-                "codigo": m.get("codigo"),
-                "servicio": servicio,
-                "distancia": dist,
-            }
-        )
+        candidatos.append({
+            "chat_id": int(chat_id_str),
+            "codigo": m.get("codigo"),
+            "servicio": servicio,
+            "distancia": dist
+        })
 
     if not candidatos:
         return None
 
+    # 5️⃣ Ordenamos por distancia
     candidatos.sort(key=lambda x: x["distancia"])
-    return candidatos[0]
+
+    # 6️⃣ Si hay empate (todos con distancia infinita o varios iguales)
+    dist_min = candidatos[0]["distancia"]
+    empatados = [c for c in candidatos if c["distancia"] == dist_min]
+
+    # 7️⃣ Elegimos aleatoriamente entre los empatados
+    elegido = random.choice(empatados)
+
+    return elegido
 
 
 # ----------------------------
