@@ -174,6 +174,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ----------------------------------------------------
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
+    # --------------------------------
+    # DETECTA /soy_movil SIEMPRE
+    # --------------------------------
+    if text.lower() == "/soy_movil":
+        context.user_data.clear()
+        context.user_data["mode"] = "movil_auth"
+        await update.message.reply_text(
+            "Escribe tu *código de móvil* (Ej: T001)",
+            parse_mode="Markdown",
+        )
+        return
 
     # ---------------------
     # OPCIONES NUEVAS
