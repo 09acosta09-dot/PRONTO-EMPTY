@@ -190,6 +190,8 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # MENÚ PRINCIPAL
     # ---------------------
     if text == "Usuario":
+        context.user_data.clear()
+        context.user_data["mode"] = "usuario"
         await update.message.reply_text(
             "Seleccione el servicio:",
             reply_markup=ReplyKeyboardMarkup(
@@ -203,20 +205,23 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 resize_keyboard=True
             )
         )
-        context.user_data["mode"] = "usuario"
         return
 
     if text == "Móvil":
-        await update.message.reply_text(
-            "Escribe tu código de móvil (Ej: T001):"
-        )
+        context.user_data.clear()
         context.user_data["mode"] = "movil_auth"
+        await update.message.reply_text(
+            "Escribe tu *código de móvil* (Ej: T001)",
+            parse_mode="Markdown",
+        )
         return
 
     if text == "Administrador":
         if update.effective_user.id in ADMIN_IDS:
+            context.user_data.clear()
+            context.user_data["mode"] = "admin"
             await update.message.reply_text(
-                "Menú administrador:",
+                "Panel administrador:",
                 reply_markup=ReplyKeyboardMarkup(
                     [
                         ["📲 Registrar móvil"],
@@ -227,11 +232,10 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         ["⬅ Volver al inicio"],
                     ],
                     resize_keyboard=True
-                ),
+                )
             )
-            context.user_data["mode"] = "admin"
         else:
-            await update.message.reply_text("No tienes permisos.")
+            await update.message.reply_text("No tienes permiso.")
         return
 
     # ---------------------
@@ -247,6 +251,14 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         )
         return
+
+    # ---------------------
+    # DEFAULT
+    # ---------------------
+    await update.message.reply_text(
+        "No entiendo eso, usa el menú por favor ❣️"
+    )
+
     # -----------------------------------
     # PROCESO DE USUARIO
     # -----------------------------------
