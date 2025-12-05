@@ -175,7 +175,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
 
-    # Usuario elige opciones nuevas:
+    # ---------------------
+    # OPCIONES NUEVAS
+    # ---------------------
     if text == "🚗 Ver mi móvil asignado":
         await ver_movil_asignado(update, context)
         return
@@ -184,9 +186,74 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cancelar_servicio(update, context)
         return
 
-    # De resto, sigue el código normal
-    await update.message.reply_text("Usa el menú, por favor.")
+    # ---------------------
+    # MENÚ PRINCIPAL
+    # ---------------------
+    if text == "Usuario":
+        await update.message.reply_text(
+            "Seleccione el servicio:",
+            reply_markup=ReplyKeyboardMarkup(
+                [
+                    ["🚕 Taxi"],
+                    ["📦 Domicilios"],
+                    ["🚚 Camionetas"],
+                    ["♿ Especial"],
+                    ["⬅ Volver al inicio"],
+                ],
+                resize_keyboard=True
+            )
+        )
+        context.user_data["mode"] = "usuario"
+        return
 
+    if text == "Móvil":
+        await update.message.reply_text(
+            "Escribe tu código de móvil (Ej: T001):"
+        )
+        context.user_data["mode"] = "movil_auth"
+        return
+
+    if text == "Administrador":
+        if update.effective_user.id in ADMIN_IDS:
+            await update.message.reply_text(
+                "Menú administrador:",
+                reply_markup=ReplyKeyboardMarkup(
+                    [
+                        ["📲 Registrar móvil"],
+                        ["🚗 Ver móviles registrados"],
+                        ["🗑 Desactivar móvil"],
+                        ["💰 Aprobar pagos"],
+                        ["📋 Ver servicios activos"],
+                        ["⬅ Volver al inicio"],
+                    ],
+                    resize_keyboard=True
+                ),
+            )
+            context.user_data["mode"] = "admin"
+        else:
+            await update.message.reply_text("No tienes permisos.")
+        return
+
+    # ---------------------
+    # VOLVER AL INICIO
+    # ---------------------
+    if text == "⬅ Volver al inicio":
+        context.user_data.clear()
+        await update.message.reply_text(
+            "Volviendo al inicio:",
+            reply_markup=ReplyKeyboardMarkup(
+                [["Usuario"], ["Móvil"], ["Administrador"]],
+                resize_keyboard=True
+            )
+        )
+        return
+
+    # ---------------------
+    # DEFAULT
+    # ---------------------
+    await update.message.reply_text(
+        "No entiendo eso, usa el menú por favor ❤️"
+    )
 
 # ----------------------------------------------------
 # HANDLER DE UBICACIÓN
