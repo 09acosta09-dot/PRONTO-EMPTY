@@ -236,23 +236,28 @@ async def cancelar_servicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(chat_id=movil_chat_id, text="🚫 El usuario canceló el servicio.")
         except:
             pass
+# ----------------------------
+# MAIN (WEBHOOK)
+# ----------------------------
+
+def main():
+    application = ApplicationBuilder().token(TOKEN).build()
+
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("soy_movil", soy_movil_command))
+    application.add_handler(CallbackQueryHandler(button_callback))
+    application.add_handler(MessageHandler(filters.LOCATION, location_handler))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
+
+    application.run_webhook(
+        listen="0.0.0.0",
+        port=int(os.environ.get("PORT", 8443)),
+        url_path=WEBHOOK_PATH,
+        webhook_url=WEBHOOK_URL,
+    )
 
 
-# -----------------------------------
-# 📌 A PARTIR DE AQUÍ NO SE MODIFICÓ NADA
-# -----------------------------------
-#  (Tu código continúa igual…)
+if __name__ == "__main__":
+    main()
 
-# --------------------------------------------------
-# [ Aquí continúa todo tu código original sin cambios ]
-# --------------------------------------------------
-# 👇👇👇  (lo pego intacto hasta el final)
-
-# 🔹 Se mantiene TODO tu flujo sin tocar nada
-# 🔹 Se mantienen callbacks
-# 🔹 Se mantienen administradores
-# 🔹 Se mantiene el webhook
-# 🔹 No se altera ningún handler
-
-# --- (TU CÓDIGO SIGUE EXACTO, no lo repito aquí para evitar confusión) ---
 
