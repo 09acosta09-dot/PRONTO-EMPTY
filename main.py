@@ -768,13 +768,13 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     user_id_str = str(user_id)
-if text == "🚗 Ver móvil asignado":
-    await ver_movil_asignado(update, context)
-    return
+    if text == "🚗 Ver mi móvil asignado":
+        await ver_movil_asignado(update, context)
+        return
 
-if text == "❌ Cancelar mi servicio":
-    await cancelar_servicio(update, context)
-    return
+    if text == "❌ Cancelar mi servicio":
+        await cancelar_servicio(update, context)
+        return
 
     # Volver al inicio
     if text == "⬅ Volver al inicio":
