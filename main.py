@@ -455,13 +455,13 @@ async def finalize_user_request(update: Update, context: ContextTypes.DEFAULT_TY
         f"🚗 Móvil asignado: *{movil_codigo}* (en espera de reserva)"
     )
             try:
-            await bot.send_message(
-                chat_id=channel_id,
-                text=resumen,
-                parse_mode="Markdown",
+               await bot.send_message(
+                   chat_id=channel_id,
+                   text=resumen,
+                   parse_mode="Markdown",
             )
-        except Exception:
-            pass
+           except Exception:
+              pass
 
         return
 
