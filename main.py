@@ -247,6 +247,79 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         )
         return
+    # -----------------------------------
+    # PROCESO DE USUARIO
+    # -----------------------------------
+    if context.user_data.get("mode") == "usuario":
+
+        # Selección de servicio
+        if text in ["🚕 Taxi", "📦 Domicilios", "🚚 Camionetas", "♿ Especial"]:
+            await update.message.reply_text(
+                "📞 Por favor escribe tu número de teléfono:"
+            )
+            context.user_data["step"] = "ask_phone"
+            context.user_data["servicio_seleccionado"] = text
+            return
+
+        # Pedir datos del usuario
+        if context.user_data.get("step") == "ask_phone":
+            context.user_data["telefono_cliente"] = text
+            await update.message.reply_text(
+                "📍 Comparte tu ubicación GPS o escribe tu dirección:"
+            )
+            context.user_data["step"] = "ask_location"
+            return
+
+
+    # -----------------------------------
+    # PROCESO ADMINISTRADOR
+    # -----------------------------------
+    if context.user_data.get("mode") == "admin":
+
+        # Registrar móvil
+        if text == "📲 Registrar móvil":
+            await update.message.reply_text("Escribe el nombre del conductor:")
+            context.user_data["admin_step"] = "reg_nombre"
+            return
+
+        # Ver móviles
+        if text == "🚗 Ver móviles registrados":
+            mobiles = get_mobiles()
+            if not mobiles:
+                await update.message.reply_text("No hay móviles registrados.")
+                return
+
+            lines = ["📋 *Móviles registrados:*"]
+            for m in mobiles.values():
+                lines.append(f"- {m.get('codigo')} - {m.get('nombre')} - {m.get('servicio')}")
+            await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+            return
+
+        # Desactivar móvil (solo activación)
+        if text == "🗑 Desactivar móvil":
+            await update.message.reply_text("Escribe el código del móvil:")
+            context.user_data["admin_step"] = "deactivate"
+            return
+
+        # Aprobar pagos
+        if text == "💰 Aprobar pagos":
+            await update.message.reply_text("Escribe el código del móvil:")
+            context.user_data["admin_step"] = "approve"
+            return
+
+        # Ver servicios activos
+        if text == "📋 Ver servicios activos":
+            services = get_services()
+            activos = [s for s in services.values() if s.get("status") in ["pendiente", "reservado"]]
+            if not activos:
+                await update.message.reply_text("No hay servicios activos.")
+                return
+
+            lines = ["📋 *Servicios activos:*"]
+            for s in activos:
+                lines.append(f"- {s.get('id')} - {s.get('nombre')}")
+            await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+            return
 
     # ---------------------
     # DEFAULT
