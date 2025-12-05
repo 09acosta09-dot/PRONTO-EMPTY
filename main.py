@@ -251,6 +251,24 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         )
         return
+    # ----------------------------------------------------
+    # FLUJO ORIGINAL SEGÚN MODO
+    # ----------------------------------------------------
+    modo = context.user_data.get("mode")
+
+    # FLUJO USUARIO
+    if modo == "usuario":
+        # Aquí delegamos a la lógica original
+        return await handle_usuario_flow(update, context)
+
+    # FLUJO MÓVIL
+    if modo == "movil" or modo == "movil_auth":
+        return await handle_movil_flow(update, context)
+
+    # FLUJO ADMINISTRADOR
+    if modo == "admin":
+        return await handle_admin_flow(update, context)
+
 
     # ---------------------
     # DEFAULT
