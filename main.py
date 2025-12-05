@@ -454,16 +454,17 @@ async def finalize_user_request(update: Update, context: ContextTypes.DEFAULT_TY
         f"🕒 Hora: *{hora}* (Colombia)\n"
         f"🚗 Móvil asignado: *{movil_codigo}* (en espera de reserva)"
     )
-        try:
-               await bot.send_message(
-                   chat_id=channel_id,
-                   text=resumen,
-                   parse_mode="Markdown",
-            )
-           except Exception:
-              pass
+    try:
+        await bot.send_message(
+            chat_id=channel_id,
+            text=resumen,
+            parse_mode="Markdown",
+        )
+        except Exception:
+            pass
 
-        return
+    return
+ 
 
     # Aquí continúan los demás callback (APROBAR_PAGO, CANCELAR_PAGO, REG_MOVIL)
     # (Tu código original sigue igual, no se cambian esas partes)
