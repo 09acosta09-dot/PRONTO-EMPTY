@@ -291,57 +291,133 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------------------------
 # COMANDO /SOY_MOVIL
 # ---------------------------
+
 async def soy_movil_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    El conductor escribe /soy_movil.
+    Vamos a pedir nombre y teléfono, y avisar al administrador.
+    """
     user = update.effective_user
-    chat_id = update.effective_chat.id
+    context.user_data["soy_movil_estado"] = "esperando_nombre"
 
-    # Info capturada automáticamente (sin pedir nada extra)
-    nombre = user.full_name
-    telegram_id = user.id
-    username = user.username if user.username else "Sin username"
-
-    # Guardar solicitud pendiente
-    pending = load_pending_mobiles()
-    pending[str(chat_id)] = {
-        "nombre": nombre,
-        "telegram_id": telegram_id,
-        "chat_id": chat_id,
-        "username": username,
-        "fecha": today_str_colombia()
-    }
-    save_pending_mobiles(pending)
-
-    # Confirmar al móvil
     await update.message.reply_text(
-        "📥 Tu solicitud fue enviada al administrador.\n\n"
-        "Cuando seas registrado podrás iniciar jornada 👍",
+        "Hola conductor 👋\n\n"
+        "Por favor escribe tu *nombre completo* para solicitar el registro como móvil.",
         parse_mode="Markdown",
     )
 
-    # Aviso a administradores
-    aviso = (
-        f"📥 *Nuevo móvil solicita registro*\n\n"
-        f"👤 *Nombre:* {nombre}\n"
-        f"🪪 *Telegram ID:* `{telegram_id}`\n"
-        f"💬 *Chat ID:* `{chat_id}`\n"
-        f"🌐 *Usuario:* @{username}\n\n"
-        "¿Deseas iniciar registro de este móvil ahora?"
-    )
 
-    # Botón para iniciar registro
-    button = InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("📝 Iniciar registro", callback_data=f"REG_MOBIL|{chat_id}")]
-        ]
-    )
+async def procesar_soy_movil(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+    user = update.effective_user
+    chat_id = update.effective_chat.id
+    estado = context.user_data.get("soy_movil_estado")
 
-    for admin_id in ADMIN_IDS:
-        try:
-            await context.bot.send_message(
-                chat_id=admin_id, text=aviso, parse_mode="Markdown", reply_markup=button
-            )
-        except:
-            pass
+    # 1) Pedimos NOMBRE
+    if estado == "esperando_nombre":
+        context.user_data["soy_movil_nombre"] = text
+        context.user_data["soy_movil_estado"] = "esperando_telefono"
+        await update.message.reply_text("Ahora escribe tu *número de teléfono*:", parse_mode="Markdown")
+        return True
+
+    # 2) Pedimos TELÉFONO
+    if estado == "esperando_telefono":
+        nombre = context.user_data.get("soy_movil_nombre")
+        telefono = text.strip()
+
+        # limpiamos estado
+        context.user_data.pop("soy_movil_nombre", None)
+        context.user_data.pop("soy_movil_estado", None)
+
+        mobiles = load_mobiles()
+
+        # Intentamos vincular con un móvil ya creado por teléfono
+        for code, m in mobiles.items():
+            if m.get("telefono") == telefono:
+                m["telegram_id"] = user.id
+                m["chat_id"] = chat_id
+                save_mobiles(mobiles)
+
+                # Borramos cualquier solicitud pendiente con ese teléfono
+                pending = load_pending_mobiles()
+                if telefono in pending:
+                    pending.pop(telefono, None)
+                    save_pending_mobiles(pending)
+
+                await update.message.reply_text(
+                    f"✅ Ya estabas registrado.\n"
+                    f"Quedaste vinculado como móvil *{code}*.",
+                    parse_mode="Markdown",
+                )
+
+                aviso = (
+                    f"✅ El conductor {nombre} ({telefono}) se vinculó automáticamente al móvil {code} "
+                    f"usando /soy_movil.\n"
+                    f"Telegram ID: `{user.id}`\nChat ID: `{chat_id}`"
+                )
+                for admin_id in ADMIN_IDS:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=admin_id, text=aviso, parse_mode="Markdown"
+                        )
+                    except Exception as e:
+                        logger.error(f"No se pudo avisar a admin {admin_id}: {e}")
+                return True
+
+        # 3) Si NO hay móvil con ese teléfono, creamos solicitud pendiente
+        pending = load_pending_mobiles()
+        pending[telefono] = {
+            "nombre": nombre,
+            "telefono": telefono,
+            "telegram_id": user.id,
+            "chat_id": chat_id,
+            "username": user.username,
+            "fecha": today_str_colombia(),
+        }
+        save_pending_mobiles(pending)
+
+        # Mensaje al conductor
+        await update.message.reply_text(
+            "✅ Tu solicitud de registro como móvil fue enviada al administrador.\n\n"
+            "Cuando te registren, el sistema te vinculará automáticamente.",
+        )
+
+        # Aviso a administradores + botón para iniciar registro
+        aviso = (
+            f"📥 Nueva solicitud /soy_movil\n\n"
+            f"Nombre: *{nombre}*\n"
+            f"Teléfono: `{telefono}`\n"
+            f"Fecha: {today_str_colombia()}\n"
+            f"Telegram ID: `{user.id}`\n"
+            f"Chat ID: `{chat_id}`\n"
+            f"Usuario: @{user.username if user.username else 'N/A'}\n\n"
+            "Toca el botón para iniciar el registro de este móvil."
+        )
+
+        button = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        "📝 Iniciar registro", callback_data=f"REG_MOBIL|{telefono}"
+                    )
+                ]
+            ]
+        )
+
+        for admin_id in ADMIN_IDS:
+            try:
+                await context.bot.send_message(
+                    chat_id=admin_id,
+                    text=aviso,
+                    parse_mode="Markdown",
+                    reply_markup=button,
+                )
+            except Exception as e:
+                logger.error(f"No se pudo avisar a admin {admin_id}: {e}")
+
+        return True
+
+    # Si no estamos en el flujo de /soy_movil
+    return False
 
 # ---------------------------
 # MANEJO DE TEXTO GENERAL
@@ -1165,13 +1241,26 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data.split("|")
     action = data[0]
-    service_id = data[1] if len(data) > 1 else None
+    key = data[1] if len(data) > 1 else None
 
-    if not service_id:
+    if not key:
         return
-if action == "REG_MOBIL":
-    await handle_iniciar_registro(query, context, service_id)
-    return
+
+    # Botón que viene del admin para registrar móvil
+    if action == "REG_MOBIL":
+        await handle_iniciar_registro(query, context, key)  # key = teléfono
+        return
+
+    # A partir de aquí, key es el service_id de los servicios
+    service_id = key
+
+    if action == "TOMAR":
+        await handle_tomar_servicio(query, context, service_id)
+    elif action == "CANCELAR_M":
+        await handle_cancelar_servicio_movil(query, context, service_id)
+    elif action == "CANCELAR_C":
+        await handle_cancelar_servicio_cliente(query, context, service_id)
+
 
     if action == "TOMAR":
         await handle_tomar_servicio(query, context, service_id)
@@ -1548,6 +1637,51 @@ async def handle_iniciar_registro(query, context, telefono):
         "Escribe el *código de móvil* (ejemplo: T005)",
         parse_mode="Markdown",
     )
+async def handle_iniciar_registro(query, context, telefono: str):
+    """
+    Se ejecuta cuando un admin toca el botón 📝 Iniciar registro
+    en la solicitud /soy_movil.
+    """
+    pending = load_pending_mobiles()
+    info = pending.get(telefono)
+
+    if not info:
+        await query.edit_message_text(
+            "❌ No se encontró la solicitud pendiente.\n"
+            "El móvil debe enviar /soy_movil nuevamente."
+        )
+        return
+
+    # Preparamos el contexto del ADMIN que tocó el botón
+    user_data = context.user_data
+    user_data.clear()
+    user_data["rol"] = "admin"
+    user_data["estado"] = "admin_reg_codigo"
+    user_data["nuevo_movil_nombre"] = info.get("nombre")
+    user_data["nuevo_movil_telefono"] = telefono
+
+    # Editamos el mensaje donde estaba el botón
+    await query.edit_message_text(
+        f"📝 Registro iniciado para el conductor:\n\n"
+        f"👤 Nombre: {info.get('nombre')}\n"
+        f"📱 Teléfono: {telefono}\n\n"
+        "Ahora escribe el *código del móvil* (ej: T001, D001, C003) en este chat.",
+        parse_mode="Markdown",
+    )
+
+    # (Opcional) mensaje directo al admin, por si el botón estaba en un canal
+    try:
+        await context.bot.send_message(
+            chat_id=query.from_user.id,
+            text=(
+                "Vamos a registrar a este móvil.\n\n"
+                "Por favor escribe aquí el *código del móvil* "
+                "(ejemplo: T001, D001, C003)."
+            ),
+            parse_mode="Markdown",
+        )
+    except Exception as e:
+        logger.error(f"No se pudo enviar mensaje directo al admin: {e}")
 
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
