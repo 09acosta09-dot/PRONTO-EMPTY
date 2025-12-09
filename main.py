@@ -620,11 +620,11 @@ def main():
 
     # WEBHOOK RAILWAY
     app.run_webhook(
-        listen="0.0.0.0",
-        port=int(os.environ.get("PORT", 8080)),
-        url_path=TOKEN,
-        webhook_url=WEBHOOK_DOMAIN + f"/webhook/{TOKEN}"
-    )
+    listen="0.0.0.0",
+    port=int(os.environ.get("PORT", 8080)),
+    url_path=f"webhook/{TOKEN}",
+    webhook_url=WEBHOOK_DOMAIN + f"/webhook/{TOKEN}"
+)
 
 
 if __name__ == "__main__":
