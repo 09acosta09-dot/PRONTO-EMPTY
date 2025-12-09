@@ -307,6 +307,11 @@ button = InlineKeyboardMarkup(
     [
         [
             InlineKeyboardButton(
+              # Aviso al administrador con botón
+button = InlineKeyboardMarkup(
+    [
+        [
+            InlineKeyboardButton(
                 "📝 Iniciar registro", callback_data=f"REG_MOBIL|{telefono}"
             )
         ]
@@ -323,7 +328,6 @@ for admin_id in ADMIN_IDS:
         )
     except:
         pass
-
 
         # Intentamos vincular con un móvil ya creado por teléfono
         for code, m in mobiles.items():
