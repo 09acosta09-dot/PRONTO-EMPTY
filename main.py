@@ -33,7 +33,7 @@ from telegram.ext import (
 # ---------------------------
 # CONFIGURACIÓN
 # ---------------------------
-TOKEN = "AQUI_TU_TOKEN"  # <<< PON AQUÍ TU TOKEN CORRECTO
+TOKEN = "7668998247:AAHaeLXjsxpy1dDhp0Z9AfuFq1tyTIALTJ4"  # <<< PON AQUÍ TU TOKEN CORRECTO
 
 # IDs de administradores (TU TELEGRAM ID + el de tu cliente)
 ADMIN_IDS = [1741298723, 7076796229]
