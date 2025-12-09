@@ -292,41 +292,38 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # COMANDO /SOY_MOVIL
 # ---------------------------
 
-async def soy_movil_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    El conductor escribe /soy_movil.
-    El objetivo es capturar el chat_id y teléfono.
-    Si ya existe un móvil con ese teléfono -> se vincula de una.
-    Si no existe -> se crea solicitud y se avisa al administrador.
-    """
-    user = update.effective_user
-    context.user_data["soy_movil_estado"] = "esperando_nombre"
+# --- Aviso a los administradores con botón ---
+aviso = (
+    f"📥 *Nuevo conductor quiere registrarse*\n\n"
+    f"👤 *Nombre:* {nombre}\n"
+    f"📞 *Teléfono:* `{telefono}`\n"
+    f"🪪 *Telegram ID:* `{user.id}`\n"
+    f"💬 *Chat ID:* `{chat_id}`\n"
+    f"🌐 *Usuario:* @{user.username if user.username else 'Sin username'}\n\n"
+    "¿Deseas iniciar registro de este móvil ahora?"
+)
 
-    await update.message.reply_text(
-        "Hola conductor 👋\n\n"
-        "Por favor escribe tu *nombre completo* para solicitar el registro como móvil.",
-        parse_mode="Markdown",
-    )
+button = InlineKeyboardMarkup(
+    [
+        [
+            InlineKeyboardButton(
+                "📝 Iniciar registro", callback_data=f"REG_MOBIL|{telefono}"
+            )
+        ]
+    ]
+)
 
+for admin_id in ADMIN_IDS:
+    try:
+        await context.bot.send_message(
+            chat_id=admin_id,
+            text=aviso,
+            parse_mode="Markdown",
+            reply_markup=button
+        )
+    except:
+        pass
 
-async def procesar_soy_movil(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
-    user = update.effective_user
-    chat_id = update.effective_chat.id
-    estado = context.user_data.get("soy_movil_estado")
-
-    if estado == "esperando_nombre":
-        context.user_data["soy_movil_nombre"] = text
-        context.user_data["soy_movil_estado"] = "esperando_telefono"
-        await update.message.reply_text("Ahora escribe tu *número de teléfono*:", parse_mode="Markdown")
-        return True
-
-    if estado == "esperando_telefono":
-        nombre = context.user_data.get("soy_movil_nombre")
-        telefono = text.strip()
-        context.user_data.pop("soy_movil_nombre", None)
-        context.user_data.pop("soy_movil_estado", None)
-
-        mobiles = load_mobiles()
 
         # Intentamos vincular con un móvil ya creado por teléfono
         for code, m in mobiles.items():
@@ -1226,6 +1223,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not service_id:
         return
+elif action == "REG_MOBIL":
+    await handle_iniciar_registro(query, context, service_id)
+    return
 
     if action == "TOMAR":
         await handle_tomar_servicio(query, context, service_id)
@@ -1577,6 +1577,31 @@ async def aprobar_pago_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------------------------
 # MAIN
 # ---------------------------
+async def handle_iniciar_registro(query, context, telefono):
+    # Buscamos info en pending
+    pending = load_pending_mobiles()
+    info = pending.get(telefono)
+
+    if not info:
+        await query.edit_message_text(
+            "❌ No se encuentra la solicitud pendiente. El móvil debe enviar /soy_movil nuevamente."
+        )
+        return
+
+    # Guardamos la info en user_data del admin
+    context.user_data.clear()
+    context.user_data["rol"] = "admin"
+    context.user_data["estado"] = "admin_reg_codigo"
+    context.user_data["nuevo_movil_telefono"] = telefono
+    context.user_data["nuevo_movil_nombre"] = info.get("nombre")
+
+    await query.edit_message_text(
+        f"📝 Registro iniciado del móvil:\n\n"
+        f"👤 Nombre: {info.get('nombre')}\n"
+        f"📱 Teléfono: {telefono}\n\n"
+        "Escribe el *código de móvil* (ejemplo: T005)",
+        parse_mode="Markdown",
+    )
 
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
