@@ -303,11 +303,7 @@ aviso = (
     "¿Deseas iniciar registro de este móvil ahora?"
 )
 
-button = InlineKeyboardMarkup(
-    [
-        [
-            InlineKeyboardButton(
-              # Aviso al administrador con botón
+# Botón para administrador
 button = InlineKeyboardMarkup(
     [
         [
@@ -318,6 +314,7 @@ button = InlineKeyboardMarkup(
     ]
 )
 
+# Aviso a administradores
 for admin_id in ADMIN_IDS:
     try:
         await context.bot.send_message(
@@ -328,6 +325,7 @@ for admin_id in ADMIN_IDS:
         )
     except:
         pass
+
 
         # Intentamos vincular con un móvil ya creado por teléfono
         for code, m in mobiles.items():
