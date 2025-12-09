@@ -272,6 +272,20 @@ user_location_keyboard = ReplyKeyboardMarkup(
 # COMANDOS BÁSICOS
 # ---------------------------
 
+async def soy_movil_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    El conductor escribe /soy_movil.
+    Vamos a pedir nombre y teléfono, y avisar al administrador.
+    """
+    user = update.effective_user
+    context.user_data["soy_movil_estado"] = "esperando_nombre"
+
+    await update.message.reply_text(
+        "Hola conductor 👋\n\n"
+        "Por favor escribe tu *nombre completo* para solicitar el registro como móvil.",
+        parse_mode="Markdown",
+    )
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     context.user_data.clear()
@@ -324,46 +338,25 @@ async def procesar_soy_movil(update: Update, context: ContextTypes.DEFAULT_TYPE,
         nombre = context.user_data.get("soy_movil_nombre")
         telefono = text.strip()
 
-        # limpiamos estado
         context.user_data.pop("soy_movil_nombre", None)
         context.user_data.pop("soy_movil_estado", None)
 
         mobiles = load_mobiles()
 
-        # Intentamos vincular con un móvil ya creado por teléfono
+        # Intentamos vincular con un móvil ya creado
         for code, m in mobiles.items():
             if m.get("telefono") == telefono:
                 m["telegram_id"] = user.id
                 m["chat_id"] = chat_id
                 save_mobiles(mobiles)
 
-                # Borramos cualquier solicitud pendiente con ese teléfono
-                pending = load_pending_mobiles()
-                if telefono in pending:
-                    pending.pop(telefono, None)
-                    save_pending_mobiles(pending)
-
                 await update.message.reply_text(
-                    f"✅ Ya estabas registrado.\n"
-                    f"Quedaste vinculado como móvil *{code}*.",
+                    f"✅ Estás registrado como móvil *{code}*.",
                     parse_mode="Markdown",
                 )
-
-                aviso = (
-                    f"✅ El conductor {nombre} ({telefono}) se vinculó automáticamente al móvil {code} "
-                    f"usando /soy_movil.\n"
-                    f"Telegram ID: `{user.id}`\nChat ID: `{chat_id}`"
-                )
-                for admin_id in ADMIN_IDS:
-                    try:
-                        await context.bot.send_message(
-                            chat_id=admin_id, text=aviso, parse_mode="Markdown"
-                        )
-                    except Exception as e:
-                        logger.error(f"No se pudo avisar a admin {admin_id}: {e}")
                 return True
 
-        # 3) Si NO hay móvil con ese teléfono, creamos solicitud pendiente
+        # Si NO existe en mobiles => guardamos pendiente
         pending = load_pending_mobiles()
         pending[telefono] = {
             "nombre": nombre,
@@ -375,22 +368,19 @@ async def procesar_soy_movil(update: Update, context: ContextTypes.DEFAULT_TYPE,
         }
         save_pending_mobiles(pending)
 
-        # Mensaje al conductor
         await update.message.reply_text(
-            "✅ Tu solicitud de registro como móvil fue enviada al administrador.\n\n"
-            "Cuando te registren, el sistema te vinculará automáticamente.",
+            "🔔 Tu solicitud de registro fue enviada al administrador.\n"
+            "Cuando te registren, podrás trabajar con el bot."
         )
 
-        # Aviso a administradores + botón para iniciar registro
+        # Enviar aviso al administrador
         aviso = (
             f"📥 Nueva solicitud /soy_movil\n\n"
-            f"Nombre: *{nombre}*\n"
-            f"Teléfono: `{telefono}`\n"
-            f"Fecha: {today_str_colombia()}\n"
-            f"Telegram ID: `{user.id}`\n"
-            f"Chat ID: `{chat_id}`\n"
-            f"Usuario: @{user.username if user.username else 'N/A'}\n\n"
-            "Toca el botón para iniciar el registro de este móvil."
+            f"👤 *{nombre}*\n"
+            f"📞 `{telefono}`\n"
+            f"🆔 Telegram `{user.id}`\n"
+            f"💬 Chat `{chat_id}`\n\n"
+            "Toca el botón para registrarlo."
         )
 
         button = InlineKeyboardMarkup(
@@ -411,12 +401,11 @@ async def procesar_soy_movil(update: Update, context: ContextTypes.DEFAULT_TYPE,
                     parse_mode="Markdown",
                     reply_markup=button,
                 )
-            except Exception as e:
-                logger.error(f"No se pudo avisar a admin {admin_id}: {e}")
+            except:
+                pass
 
         return True
 
-    # Si no estamos en el flujo de /soy_movil
     return False
 
 # ---------------------------
