@@ -1223,7 +1223,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not service_id:
         return
-elif action == "REG_MOBIL":
+if action == "REG_MOBIL":
     await handle_iniciar_registro(query, context, service_id)
     return
 
