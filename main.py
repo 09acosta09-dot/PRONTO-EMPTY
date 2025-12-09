@@ -403,11 +403,12 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
 
     # Primero, si estamos en flujo /soy_movil, lo atendemos
-    soy_movil_estado = context.user_data.get("soy_movil_estado")
-    if soy_movil_estado:
+    soy_estado = context.user_data.get("soy_estado")
+    if soy_estado:
         handled = await procesar_soy_movil(update, context, text)
         if handled:
             return
+
 
     rol = context.user_data.get("rol")
     estado = context.user_data.get("estado")
