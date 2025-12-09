@@ -411,14 +411,17 @@ for admin_id in ADMIN_IDS:
             f"Usuario: @{user.username if user.username else 'N/A'}"
         )
         for admin_id in ADMIN_IDS:
-            try:
-                await context.bot.send_message(
-                    chat_id=admin_id, text=aviso, parse_mode="Markdown"
-                )
-            except Exception as e:
-                logger.error(f"No se pudo avisar a admin {admin_id}: {e}")
+    try:
+        await context.bot.send_message(
+            chat_id=admin_id, text=aviso, parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.error(f"No se pudo avisar a admin {admin_id}: {e}")
 
-        return True
+    # Continuamos después del bloque try-except
+
+return True
+
 
 # ---------------------------
 # MANEJO DE TEXTO GENERAL
