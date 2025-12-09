@@ -307,56 +307,38 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------------------------
 
 async def soy_movil_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    El conductor escribe /soy_movil.
-    Vamos a pedir nombre y teléfono, y avisar al administrador.
-    """
     user = update.effective_user
-    context.user_data["soy_movil_estado"] = "esperando_nombre"
+    chat_id = update.effective_chat.id
+
+    context.user_data["soy_estado"] = "pidiendo_nombre"
 
     await update.message.reply_text(
-        "Hola conductor 👋\n\n"
-        "Por favor escribe tu *nombre completo* para solicitar el registro como móvil.",
+        "Perfecto, vamos a registrarte como móvil 🔧\n\n"
+        "📌 Escribe tu *nombre completo*:",
         parse_mode="Markdown",
     )
 
 
 async def procesar_soy_movil(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+
     user = update.effective_user
     chat_id = update.effective_chat.id
-    estado = context.user_data.get("soy_movil_estado")
 
-    # 1) Pedimos NOMBRE
-    if estado == "esperando_nombre":
-        context.user_data["soy_movil_nombre"] = text
-        context.user_data["soy_movil_estado"] = "esperando_telefono"
-        await update.message.reply_text("Ahora escribe tu *número de teléfono*:", parse_mode="Markdown")
+    estado = context.user_data.get("soy_estado")
+
+    # Paso 1: nombre
+    if estado == "pidiendo_nombre":
+        context.user_data["soy_nombre"] = text
+        context.user_data["soy_estado"] = "pidiendo_telefono"
+        await update.message.reply_text("📞 Ahora escribe tu *teléfono*:")
         return True
 
-    # 2) Pedimos TELÉFONO
-    if estado == "esperando_telefono":
-        nombre = context.user_data.get("soy_movil_nombre")
+    # Paso 2: teléfono
+    if estado == "pidiendo_telefono":
+        nombre = context.user_data["soy_nombre"]
         telefono = text.strip()
 
-        context.user_data.pop("soy_movil_nombre", None)
-        context.user_data.pop("soy_movil_estado", None)
-
-        mobiles = load_mobiles()
-
-        # Intentamos vincular con un móvil ya creado
-        for code, m in mobiles.items():
-            if m.get("telefono") == telefono:
-                m["telegram_id"] = user.id
-                m["chat_id"] = chat_id
-                save_mobiles(mobiles)
-
-                await update.message.reply_text(
-                    f"✅ Estás registrado como móvil *{code}*.",
-                    parse_mode="Markdown",
-                )
-                return True
-
-        # Si NO existe en mobiles => guardamos pendiente
+        # Guardar solicitud pendiente
         pending = load_pending_mobiles()
         pending[telefono] = {
             "nombre": nombre,
@@ -368,19 +350,21 @@ async def procesar_soy_movil(update: Update, context: ContextTypes.DEFAULT_TYPE,
         }
         save_pending_mobiles(pending)
 
+        # Aviso al móvil
         await update.message.reply_text(
-            "🔔 Tu solicitud de registro fue enviada al administrador.\n"
-            "Cuando te registren, podrás trabajar con el bot."
+            "📩 Tu solicitud fue enviada al administrador.\n"
+            "Cuando te registren podrás iniciar jornada.",
+            parse_mode="Markdown",
         )
 
-        # Enviar aviso al administrador
+        # Aviso a los administradores
         aviso = (
-            f"📥 Nueva solicitud /soy_movil\n\n"
-            f"👤 *{nombre}*\n"
-            f"📞 `{telefono}`\n"
-            f"🆔 Telegram `{user.id}`\n"
-            f"💬 Chat `{chat_id}`\n\n"
-            "Toca el botón para registrarlo."
+            f"📥 *Nuevo conductor quiere registrarse*\n\n"
+            f"👤 *Nombre:* {nombre}\n"
+            f"📞 *Teléfono:* `{telefono}`\n"
+            f"🪪 *Telegram ID:* `{user.id}`\n"
+            f"💬 *Chat ID:* `{chat_id}`\n"
+            f"🌐 Usuario: @{user.username if user.username else 'Sin username'}"
         )
 
         button = InlineKeyboardMarkup(
@@ -401,9 +385,10 @@ async def procesar_soy_movil(update: Update, context: ContextTypes.DEFAULT_TYPE,
                     parse_mode="Markdown",
                     reply_markup=button,
                 )
-            except:
-                pass
+            except Exception as e:
+                print(f"ERROR ENVIANDO MENSAJE AL ADMIN {admin_id}: {e}")
 
+        context.user_data["soy_estado"] = None
         return True
 
     return False
