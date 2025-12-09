@@ -291,137 +291,57 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------------------------
 # COMANDO /SOY_MOVIL
 # ---------------------------
+async def soy_movil_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    chat_id = update.effective_chat.id
 
-# --- Aviso a los administradores con botón ---
-aviso = (
-    f"📥 *Nuevo conductor quiere registrarse*\n\n"
-    f"👤 *Nombre:* {nombre}\n"
-    f"📞 *Teléfono:* `{telefono}`\n"
-    f"🪪 *Telegram ID:* `{user.id}`\n"
-    f"💬 *Chat ID:* `{chat_id}`\n"
-    f"🌐 *Usuario:* @{user.username if user.username else 'Sin username'}\n\n"
-    "¿Deseas iniciar registro de este móvil ahora?"
-)
+    # Info capturada automáticamente (sin pedir nada extra)
+    nombre = user.full_name
+    telegram_id = user.id
+    username = user.username if user.username else "Sin username"
 
-# Botón para administrador
-button = InlineKeyboardMarkup(
-    [
+    # Guardar solicitud pendiente
+    pending = load_pending_mobiles()
+    pending[str(chat_id)] = {
+        "nombre": nombre,
+        "telegram_id": telegram_id,
+        "chat_id": chat_id,
+        "username": username,
+        "fecha": today_str_colombia()
+    }
+    save_pending_mobiles(pending)
+
+    # Confirmar al móvil
+    await update.message.reply_text(
+        "📥 Tu solicitud fue enviada al administrador.\n\n"
+        "Cuando seas registrado podrás iniciar jornada 👍",
+        parse_mode="Markdown",
+    )
+
+    # Aviso a administradores
+    aviso = (
+        f"📥 *Nuevo móvil solicita registro*\n\n"
+        f"👤 *Nombre:* {nombre}\n"
+        f"🪪 *Telegram ID:* `{telegram_id}`\n"
+        f"💬 *Chat ID:* `{chat_id}`\n"
+        f"🌐 *Usuario:* @{username}\n\n"
+        "¿Deseas iniciar registro de este móvil ahora?"
+    )
+
+    # Botón para iniciar registro
+    button = InlineKeyboardMarkup(
         [
-            InlineKeyboardButton(
-                "📝 Iniciar registro", callback_data=f"REG_MOBIL|{telefono}"
-            )
+            [InlineKeyboardButton("📝 Iniciar registro", callback_data=f"REG_MOBIL|{chat_id}")]
         ]
-    ]
-)
+    )
 
-# Aviso a administradores
-for admin_id in ADMIN_IDS:
-    try:
-            # Aviso al móvil
-        await update.message.reply_text(
-            "Perfecto 👌 Tu solicitud fue enviada al administrador.\n\n"
-            "Cuando te registren podrás activar jornada.",
-            parse_mode="Markdown",
-        )
-
-        # Botón para el administrador
-        button = InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(
-                        "📝 Iniciar registro", callback_data=f"REG_MOBIL|{telefono}"
-                    )
-                ]
-            ]
-        )
-
-        # Aviso a administradores
-        for admin_id in ADMIN_IDS:
-            try:
-                await context.bot.send_message(
-                    chat_id=admin_id,
-                    text=aviso,
-                    parse_mode="Markdown",
-                    reply_markup=button
-                )
-            except:
-                pass
-
-        context.user_data["soy_estado"] = None
-        return True
-
-
-        # Intentamos vincular con un móvil ya creado por teléfono
-        for code, m in mobiles.items():
-            if m.get("telefono") == telefono:
-                m["telegram_id"] = user.id
-                m["chat_id"] = chat_id
-                save_mobiles(mobiles)
-
-                # Borramos cualquier solicitud pendiente con ese teléfono
-                pending = load_pending_mobiles()
-                if telefono in pending:
-                    pending.pop(telefono, None)
-                    save_pending_mobiles(pending)
-
-                await update.message.reply_text(
-                    f"✅ Ya estabas registrado.\n"
-                    f"Quedaste vinculado como móvil *{code}*.",
-                    parse_mode="Markdown",
-                )
-
-                aviso = (
-                    f"✅ El conductor {nombre} ({telefono}) se vinculó automáticamente al móvil {code} "
-                    f"usando /soy_movil.\n"
-                    f"Telegram ID: `{user.id}`\nChat ID: `{chat_id}`"
-                )
-                for admin_id in ADMIN_IDS:
-                    try:
-                        await context.bot.send_message(
-                            chat_id=admin_id, text=aviso, parse_mode="Markdown"
-                        )
-                    except Exception as e:
-                        logger.error(f"No se pudo avisar a admin {admin_id}: {e}")
-                return True
-
-        # Si no hay móvil con ese teléfono, creamos solicitud pendiente
-        pending = load_pending_mobiles()
-        pending[telefono] = {
-            "nombre": nombre,
-            "telefono": telefono,
-            "telegram_id": user.id,
-            "chat_id": chat_id,
-            "username": user.username,
-            "fecha": today_str_colombia(),
-        }
-        save_pending_mobiles(pending)
-
-        await update.message.reply_text(
-            "✅ Tu solicitud de registro como móvil fue enviada al administrador.\n\n"
-            "Cuando te registren, el sistema te vinculará automáticamente.",
-        )
-
-        aviso = (
-            f"📥 Nueva solicitud /soy_movil\n\n"
-            f"Nombre: *{nombre}*\n"
-            f"Teléfono: `{telefono}`\n"
-            f"Fecha: {today_str_colombia()}\n"
-            f"Telegram ID: `{user.id}`\n"
-            f"Chat ID: `{chat_id}`\n"
-            f"Usuario: @{user.username if user.username else 'N/A'}"
-        )
-        for admin_id in ADMIN_IDS:
-           try:
-        await context.bot.send_message(
-            chat_id=admin_id, text=aviso, parse_mode="Markdown"
-        )
-    except Exception as e:
-        logger.error(f"No se pudo avisar a admin {admin_id}: {e}")
-
-    # Continuamos después del bloque try-except
-
-return True
-
+    for admin_id in ADMIN_IDS:
+        try:
+            await context.bot.send_message(
+                chat_id=admin_id, text=aviso, parse_mode="Markdown", reply_markup=button
+            )
+        except:
+            pass
 
 # ---------------------------
 # MANEJO DE TEXTO GENERAL
