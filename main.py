@@ -419,9 +419,8 @@ for admin_id in ADMIN_IDS:
                 logger.error(f"No se pudo avisar a admin {admin_id}: {e}")
 
         return True
-
-    return False
-
+           except:
+             return False
 
 # ---------------------------
 # MANEJO DE TEXTO GENERAL
