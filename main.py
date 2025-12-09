@@ -317,14 +317,38 @@ button = InlineKeyboardMarkup(
 # Aviso a administradores
 for admin_id in ADMIN_IDS:
     try:
-        await context.bot.send_message(
-            chat_id=admin_id,
-            text=aviso,
+            # Aviso al móvil
+        await update.message.reply_text(
+            "Perfecto 👌 Tu solicitud fue enviada al administrador.\n\n"
+            "Cuando te registren podrás activar jornada.",
             parse_mode="Markdown",
-            reply_markup=button
         )
-    except:
-        pass
+
+        # Botón para el administrador
+        button = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        "📝 Iniciar registro", callback_data=f"REG_MOBIL|{telefono}"
+                    )
+                ]
+            ]
+        )
+
+        # Aviso a administradores
+        for admin_id in ADMIN_IDS:
+            try:
+                await context.bot.send_message(
+                    chat_id=admin_id,
+                    text=aviso,
+                    parse_mode="Markdown",
+                    reply_markup=button
+                )
+            except:
+                pass
+
+        context.user_data["soy_estado"] = None
+        return True
 
 
         # Intentamos vincular con un móvil ya creado por teléfono
