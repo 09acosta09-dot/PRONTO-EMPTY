@@ -1029,182 +1029,59 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ASIGNACIÓN DE SERVICIO
 # ---------------------------
 
-async def asignar_servicio(service_id: str, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Intenta asignar el servicio al móvil más cercano según ubicación.
-    Si no hay móviles candidatos, se publica el servicio en el canal para que lo tomen.
-    """
-    service = SERVICES.get(service_id)
-    if not service:
-        return
-
-    channel_id = service["channel_id"]
-    cliente_lat = service.get("cliente_lat")
-    cliente_lon = service.get("cliente_lon")
-
-    # Mensaje base al canal
-    texto_canal_base = (
-        f"📢 *Nuevo servicio* [{service_id}]\n\n"
-        f"Servicio: *{mobile_service_name(service['tipo'])}*\n"
-        f"Cliente: *{service['cliente_nombre']}*\n"
-        f"Teléfono: `{service['cliente_telefono']}`\n"
-        f"Origen / Dirección: {service['origen']}\n"
-        f"Destino / Observaciones: {service['detalles']}\n"
-    )
-    if cliente_lat is not None and cliente_lon is not None:
-        texto_canal_base += f"\n📍 Ubicación compartida por el cliente."
-
-    # Enviamos primero al canal como registro
-    try:
-        msg = await context.bot.send_message(
-            chat_id=channel_id,
-            text=texto_canal_base + "\n\nBuscando el móvil más cercano...",
-            parse_mode="Markdown",
-        )
-        service["channel_message_id"] = msg.message_id
-    except Exception as e:
-        logger.error(f"Error enviando servicio {service_id} al canal: {e}")
-        service["channel_message_id"] = None
-
+async def asignar_servicio(service_id, context):
+    # Cargar los móviles del JSON
     mobiles = load_mobiles()
 
-    candidatos = []
-    if cliente_lat is not None and cliente_lon is not None:
-        # Solo buscamos cercanía si el cliente compartió ubicación
-        for code, m in mobiles.items():
-            if m.get("servicio") != service["tipo"]:
-                continue
-            if not m.get("en_jornada"):
-                continue
-            puede, _ = mobile_can_work(m)
-            if not puede:
-                continue
-            ubic = m.get("ubicacion")
-            if not ubic:
-                continue
-            lat = ubic.get("lat")
-            lon = ubic.get("lon")
-            if lat is None or lon is None:
-                continue
-            dist = haversine_km(cliente_lat, cliente_lon, lat, lon)
-            candidatos.append((dist, code, m))
+    # Buscar móviles activos
+    activos = [m for m in mobiles if m.get("activo", False)]
 
-    # Si hay candidato(s) -> asignamos al más cercano
-    if candidatos:
-        candidatos.sort(key=lambda x: x[0])
-        dist_km, code, mobile = candidatos[0]
-        chat_id_movil = mobile.get("chat_id")
+    if not activos:
+        # No hay móviles disponibles, publicamos en el canal
+        await aviso_canal_fallback(service_id, context)
+        return
 
-        if not chat_id_movil:
-            logger.warning(f"Móvil {code} no tiene chat_id, no se puede enviar directo.")
-        else:
-            service["estado"] = "asignado"
-            service["movil_codigo"] = code
-            service["movil_nombre"] = mobile.get("nombre")
-            service["movil_telefono"] = mobile.get("telefono")
-            service["movil_chat_id"] = chat_id_movil
+    # Ordenar por distancia (ya lo haces)
+    activos.sort(key=lambda x: x.get("distancia", 999999))
 
-            # Aviso al móvil
-            texto_movil = (
-                f"✅ Te fue asignado un servicio [{service_id}] por cercanía.\n\n"
-                f"Servicio: *{mobile_service_name(service['tipo'])}*\n"
-                f"Cliente: *{service['cliente_nombre']}*\n"
-                f"Teléfono cliente: `{service['cliente_telefono']}`\n"
-                f"Origen / Dirección: {service['origen']}\n"
-                f"Destino / Observaciones: {service['detalles']}\n"
-            )
-            if cliente_lat is not None and cliente_lon is not None:
-                texto_movil += "\n📍 El cliente compartió ubicación (puedes verla en el mapa)."
+    movil_asignado = activos[0]  # El más cercano
+    chat_id_movil = movil_asignado["chat_id"]
 
-            try:
-                await context.bot.send_message(
-                    chat_id=chat_id_movil,
-                    text=texto_movil,
-                    parse_mode="Markdown",
-                    reply_markup=InlineKeyboardMarkup(
-                        [
-                            [
-                                InlineKeyboardButton(
-                                    "⚠️ Cancelar servicio", callback_data=f"CANCELAR_M|{service_id}"
-                                )
-                            ]
-                        ]
-                    ),
-                )
-            except Exception as e:
-                logger.error(f"No se pudo enviar servicio al móvil {code}: {e}")
+    # Guardar en JSON que este servicio ya está asignado
+    context.bot_data.setdefault("servicios", {})
+    context.bot_data["servicios"][service_id] = {
+        "asignado": True,
+        "movil": chat_id_movil,
+    }
 
-            # Aviso al cliente
-            try:
-                await context.bot.send_message(
-                    chat_id=service["cliente_chat_id"],
-                    text=(
-                        f"✅ Tu servicio [{service_id}] fue asignado al móvil *{service['movil_nombre']}* "
-                        f"({service['movil_codigo']}).\n\n"
-                        f"Teléfono del móvil: `{service['movil_telefono']}`"
-                    ),
-                    parse_mode="Markdown",
-                    reply_markup=InlineKeyboardMarkup(
-                        [
-                            [
-                                InlineKeyboardButton(
-                                    "⚠️ Cancelar servicio", callback_data=f"CANCELAR_C|{service_id}"
-                                )
-                            ]
-                        ]
-                    ),
-                )
-            except Exception as e:
-                logger.error(f"No se pudo avisar al cliente para servicio {service_id}: {e}")
-
-            # Editar mensaje en el canal
-            if service["channel_message_id"]:
-                texto_canal = (
-                    f"📢 *Servicio asignado automáticamente por cercanía* [{service_id}]\n\n"
-                    f"Servicio: *{mobile_service_name(service['tipo'])}*\n"
-                    f"Cliente: *{service['cliente_nombre']}*\n"
-                    f"Teléfono: `{service['cliente_telefono']}`\n"
-                    f"Origen / Dirección: {service['origen']}\n"
-                    f"Destino / Observaciones: {service['detalles']}\n\n"
-                    f"✅ Asignado a: *{service['movil_nombre']}* ({service['movil_codigo']})\n"
-                    f"Tel móvil: `{service['movil_telefono']}`\n"
-                    f"Distancia aproximada: {dist_km:.1f} km"
-                )
-                try:
-                    await context.bot.edit_message_text(
-                        chat_id=channel_id,
-                        message_id=service["channel_message_id"],
-                        text=texto_canal,
-                        parse_mode="Markdown",
-                    )
-                except Exception as e:
-                    logger.error(f"No se pudo editar mensaje del canal para servicio {service_id}: {e}")
-            return
-
-    # Si no hay candidatos (o no se pudo enviar directo) -> fallback al canal
-    service["estado"] = "pendiente"
+    # Enviar mensaje al móvil (ESTO FALTABA)
     try:
-        if service["channel_message_id"]:
-            await context.bot.edit_message_text(
-                chat_id=channel_id,
-                message_id=service["channel_message_id"],
-                text=texto_canal_base + "\n\n"
-                     "No se encontró un móvil cercano activo.\n"
-                     "Cualquier móvil disponible puede *tomar el servicio*.",
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(
-                    [
-                        [
-                            InlineKeyboardButton(
-                                "✅ Tomar servicio", callback_data=f"TOMAR|{service_id}"
-                            )
-                        ]
-                    ]
-                ),
-            )
-    except Exception as e:
-        logger.error(f"No se pudo actualizar mensaje del canal en fallback para {service_id}: {e}")
+        await context.bot.send_message(
+            chat_id=chat_id_movil,
+            text=(
+                "🚨 Nuevo servicio asignado automáticamente\n\n"
+                f"ID del servicio: *{service_id}*\n"
+                "Por favor revisa los detalles en el canal correspondiente."
+            ),
+            parse_mode="Markdown",
+        )
+    except:
+        pass
 
+    # Publicar en el canal
+    await publicar_en_canal(service_id, movil_asignado, context)
+
+    # Confirmar al administrador
+    for admin in ADMIN_IDS:
+        try:
+            await context.bot.send_message(
+                admin,
+                f"📌 Servicio {service_id} asignado automáticamente al móvil:\n"
+                f"📲 Chat ID: `{chat_id_movil}`",
+                parse_mode="Markdown",
+            )
+        except:
+            pass
 
 # ---------------------------
 # CALLBACKS (BOTONES INLINE)
