@@ -175,8 +175,12 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 🚀 Botón iniciar = /start
     if text == "🚀 Iniciar":
-        await start(update, context)
-        return
+    context.user_data.clear()
+    await update.message.reply_text(
+        "Elige una opción:",
+        reply_markup=main_keyboard,
+    )
+    return
 
     # Volver al inicio
     if text == "⬅ Volver al inicio":
@@ -203,11 +207,15 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Panel administrador:", reply_markup=admin_keyboard)
         return
 
-    # 🔁 REDIRECCIÓN AUTOMÁTICA
-    await update.message.reply_text(
-        "Para comenzar, toca el botón 👇",
-        reply_markup=start_keyboard,
-    )
+        # 🔁 Redirección automática SOLO si el usuario no está en ningún flujo
+    mode = context.user_data.get("mode")
+
+    if not mode:
+        await update.message.reply_text(
+            "Para comenzar, toca el botón 👇",
+            reply_markup=start_keyboard,
+        )
+        return
 
 # ----------------------------
 # MAIN
