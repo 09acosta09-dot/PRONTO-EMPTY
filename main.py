@@ -707,13 +707,14 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id_str = str(user_id)
 
     # Volver al inicio
-    if text == "⬅ Volver al inicio":
-        context.user_data.clear()
-        await update.message.reply_text(
-            "Volviendo al inicio.\n\nElige una opción:",
-            reply_markup=main_keyboard,
-        )
-        return
+    if text == "🚀 Iniciar":
+    context.user_data.clear()
+    await update.message.reply_text(
+        "Elige una opción:",
+        reply_markup=main_keyboard,
+    )
+    return
+
 
     # Entrar como Usuario
     if text == "Usuario":
