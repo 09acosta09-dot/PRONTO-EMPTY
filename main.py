@@ -175,12 +175,12 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 🚀 Botón iniciar = /start
     if text == "🚀 Iniciar":
-    context.user_data.clear()
-    await update.message.reply_text(
-        "Elige una opción:",
-        reply_markup=main_keyboard,
-    )
-    return
+        context.user_data.clear()
+        await update.message.reply_text(
+            "Elige una opción:",
+            reply_markup=main_keyboard,
+        )
+        return
 
     # Volver al inicio
     if text == "⬅ Volver al inicio":
