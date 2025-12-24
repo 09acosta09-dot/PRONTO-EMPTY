@@ -691,6 +691,319 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown",
         )
         return
+# A partir de aquí, key es el service_id de los servicios
+    service_id = key
+
+    if action == "TOMAR":
+        await handle_tomar_servicio(query, context, service_id)
+    elif action == "CANCELAR_M":
+        await handle_cancelar_servicio_movil(query, context, service_id)
+    elif action == "CANCELAR_C":
+        await handle_cancelar_servicio_cliente(query, context, service_id)
+
+
+    if action == "TOMAR":
+        await handle_tomar_servicio(query, context, service_id)
+    elif action == "CANCELAR_M":
+        await handle_cancelar_servicio_movil(query, context, service_id)
+    elif action == "CANCELAR_C":
+        await handle_cancelar_servicio_cliente(query, context, service_id)
+
+
+async def handle_tomar_servicio(query, context, service_id: str):
+    """Toma servicio desde el canal (fallback)."""
+    user = query.from_user
+    codigo_movil, mobile = find_mobile_by_telegram_id(user.id)
+    if not mobile:
+        try:
+            await context.bot.send_message(
+                chat_id=user.id,
+                text=(
+                    "Para tomar servicios debes iniciar sesión como *Móvil* en el bot PRONTO.\n\n"
+                    "Entra al bot, toca *Móvil* y escribe tu código (ej: T001)."
+                ),
+                parse_mode="Markdown",
+            )
+        except Exception:
+            pass
+        return
+
+    service = SERVICES.get(service_id)
+    if not service:
+        await query.edit_message_text("Este servicio ya no está disponible.")
+        return
+
+    if service.get("estado") != "pendiente":
+        await query.edit_message_text("Este servicio ya fue tomado por otro móvil.")
+        return
+
+    # Verificar tipo de servicio
+    if mobile.get("servicio") != service.get("tipo"):
+        await context.bot.send_message(
+            chat_id=user.id,
+            text=(
+                "Este servicio no corresponde a tu tipo de servicio.\n\n"
+                f"Tu tipo: {mobile_service_name(mobile.get('servicio'))}"
+            ),
+        )
+        return
+
+    # Verificar corte y pago
+    puede, msg = mobile_can_work(mobile)
+    if not puede:
+        await context.bot.send_message(
+            chat_id=user.id,
+            text="⛔ No puedes tomar este servicio:\n\n" + msg,
+        )
+        return
+
+    # Asignar
+    service["estado"] = "asignado"
+    service["movil_codigo"] = codigo_movil
+    service["movil_nombre"] = mobile.get("nombre")
+    service["movil_telefono"] = mobile.get("telefono")
+    service["movil_chat_id"] = mobile.get("chat_id") or user.id
+
+    channel_id = service["channel_id"]
+    channel_msg_id = service.get("channel_message_id")
+
+    texto_canal = (
+        f"📢 *Servicio asignado* [{service_id}]\n\n"
+        f"Servicio: *{mobile_service_name(service['tipo'])}*\n"
+        f"Cliente: *{service['cliente_nombre']}*\n"
+        f"Teléfono: `{service['cliente_telefono']}`\n"
+        f"Origen / Dirección: {service['origen']}\n"
+        f"Destino / Observaciones: {service['detalles']}\n\n"
+        f"✅ Asignado a: *{service['movil_nombre']}* ({service['movil_codigo']})\n"
+        f"Tel móvil: `{service['movil_telefono']}`"
+    )
+    if channel_msg_id:
+        try:
+            await context.bot.edit_message_text(
+                chat_id=channel_id,
+                message_id=channel_msg_id,
+                text=texto_canal,
+                parse_mode="Markdown",
+            )
+        except Exception as e:
+            logger.error(f"No se pudo editar mensaje del canal en TOMAR: {e}")
+
+    # Avisar al móvil
+    texto_movil = (
+        f"✅ Has tomado el servicio [{service_id}]\n\n"
+        f"Cliente: *{service['cliente_nombre']}*\n"
+        f"Teléfono: `{service['cliente_telefono']}`\n"
+        f"Origen / Dirección: {service['origen']}\n"
+        f"Destino / Observaciones: {service['detalles']}\n"
+    )
+    try:
+        await context.bot.send_message(
+            chat_id=service["movil_chat_id"],
+            text=texto_movil,
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(
+                            "⚠️ Cancelar servicio", callback_data=f"CANCELAR_M|{service_id}"
+                        )
+                    ]
+                ]
+            ),
+        )
+    except Exception as e:
+        logger.error(f"No se pudo enviar mensaje al móvil en TOMAR: {e}")
+
+    # Avisar al cliente
+    try:
+        await context.bot.send_message(
+            chat_id=service["cliente_chat_id"],
+            text=(
+                f"✅ Tu servicio [{service_id}] fue tomado.\n\n"
+                f"Móvil asignado: *{service['movil_nombre']}* ({service['movil_codigo']})\n"
+                f"Teléfono del móvil: `{service['movil_telefono']}`"
+            ),
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(
+                            "⚠️ Cancelar servicio", callback_data=f"CANCELAR_C|{service_id}"
+                        )
+                    ]
+                ]
+            ),
+        )
+    except Exception as e:
+        logger.error(f"No se pudo avisar al cliente en TOMAR: {e}")
+
+
+async def handle_cancelar_servicio_movil(query, context, service_id: str):
+    """Cancelación hecha por el móvil."""
+    user = query.from_user
+    codigo_movil, mobile = find_mobile_by_telegram_id(user.id)
+    if not mobile:
+        await context.bot.send_message(
+            chat_id=user.id,
+            text="Solo un móvil asignado al servicio puede cancelarlo.",
+        )
+        return
+
+    service = SERVICES.get(service_id)
+    if not service:
+        await context.bot.send_message(
+            chat_id=user.id,
+            text="Este servicio ya no existe o el bot se reinició.",
+        )
+        return
+
+    if service.get("movil_codigo") != codigo_movil:
+        await context.bot.send_message(
+            chat_id=user.id,
+            text="No eres el móvil asignado a este servicio, no puedes cancelarlo.",
+        )
+        return
+
+    # Volvemos el servicio a pendiente para que otro móvil lo tome
+    service["estado"] = "pendiente"
+    service["movil_codigo"] = None
+    service["movil_nombre"] = None
+    service["movil_telefono"] = None
+    service["movil_chat_id"] = None
+
+    channel_id = service["channel_id"]
+    channel_msg_id = service.get("channel_message_id")
+
+    texto_canal = (
+        f"📢 *Servicio disponible nuevamente* [{service_id}]\n\n"
+        f"Servicio: *{mobile_service_name(service['tipo'])}*\n"
+        f"Cliente: *{service['cliente_nombre']}*\n"
+        f"Teléfono: `{service['cliente_telefono']}`\n"
+        f"Origen / Dirección: {service['origen']}\n"
+        f"Destino / Observaciones: {service['detalles']}\n\n"
+        "⚠️ El móvil anterior canceló el servicio.\n"
+        "Cualquier móvil disponible puede tomarlo."
+    )
+
+    if channel_msg_id:
+        try:
+            await context.bot.edit_message_text(
+                chat_id=channel_id,
+                message_id=channel_msg_id,
+                text=texto_canal,
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(
+                    [
+                        [
+                            InlineKeyboardButton(
+                                "✅ Tomar servicio", callback_data=f"TOMAR|{service_id}"
+                            )
+                        ]
+                    ]
+                ),
+            )
+        except Exception as e:
+            logger.error(f"No se pudo reactivar el servicio en el canal: {e}")
+
+    # Avisar al móvil que canceló
+    try:
+        await context.bot.send_message(
+            chat_id=user.id,
+            text=f"Has cancelado el servicio [{service_id}].",
+        )
+    except Exception as e:
+        logger.error(f"No se pudo avisar al móvil que canceló: {e}")
+
+    # Avisar al cliente
+    try:
+        await context.bot.send_message(
+            chat_id=service["cliente_chat_id"],
+            text=(
+                f"⚠️ El móvil que tenía tu servicio [{service_id}] lo canceló.\n"
+                "Tu solicitud volvió a la lista para que otro móvil la tome."
+            ),
+        )
+    except Exception as e:
+        logger.error(f"No se pudo avisar al cliente sobre la cancelación del móvil: {e}")
+
+
+async def handle_cancelar_servicio_cliente(query, context, service_id: str):
+    """Cancelación hecha por el cliente."""
+    user = query.from_user
+    service = SERVICES.get(service_id)
+    if not service:
+        await context.bot.send_message(
+            chat_id=user.id,
+            text="Este servicio ya no existe o el bot se reinició.",
+        )
+        return
+
+    if user.id != service.get("cliente_id"):
+        await context.bot.send_message(
+            chat_id=user.id,
+            text="Solo el cliente que pidió el servicio puede cancelarlo.",
+        )
+        return
+
+    estado = service.get("estado")
+    service["estado"] = "cancelado_cliente"
+
+    # Avisar al móvil, si había uno asignado
+    if service.get("movil_chat_id"):
+        try:
+            await context.bot.send_message(
+                chat_id=service["movil_chat_id"],
+                text=(
+                    f"⚠️ El cliente canceló el servicio [{service_id}].\n"
+                    "Ya no debes atender esta solicitud."
+                ),
+            )
+        except Exception as e:
+            logger.error(f"No se pudo avisar al móvil en cancelación del cliente: {e}")
+
+    # Avisar a los administradores
+    aviso = (
+        f"⚠️ El cliente canceló el servicio [{service_id}].\n\n"
+        f"Cliente: {service['cliente_nombre']} ({service['cliente_telefono']})\n"
+        f"Estado anterior: {estado}\n"
+        f"Servicio: {mobile_service_name(service['tipo'])}"
+    )
+    for admin_id in ADMIN_IDS:
+        try:
+            await context.bot.send_message(chat_id=admin_id, text=aviso)
+        except Exception as e:
+            logger.error(f"No se pudo avisar a admin en cancelación del cliente: {e}")
+
+    # Avisar al cliente
+    try:
+        await context.bot.send_message(
+            chat_id=service["cliente_chat_id"],
+            text=f"✅ Has cancelado tu servicio [{service_id}].",
+        )
+    except Exception as e:
+        logger.error(f"No se pudo confirmar al cliente su cancelación: {e}")
+
+    # Actualizar mensaje en el canal (solo como registro)
+    channel_id = service["channel_id"]
+    channel_msg_id = service.get("channel_message_id")
+    if channel_msg_id:
+        texto_canal = (
+            f"📢 *Servicio cancelado por el cliente* [{service_id}]\n\n"
+            f"Servicio: *{mobile_service_name(service['tipo'])}*\n"
+            f"Cliente: *{service['cliente_nombre']}*\n"
+            f"Teléfono: `{service['cliente_telefono']}`\n"
+            f"Origen / Dirección: {service['origen']}\n"
+            f"Destino / Observaciones: {service['detalles']}\n"
+        )
+        try:
+            await context.bot.edit_message_text(
+                chat_id=channel_id,
+                message_id=channel_msg_id,
+                text=texto_canal,
+                parse_mode="Markdown",
+            )
+        except Exception as e:
+            logger.error(f"No se pudo editar mensaje del canal en cancelación cliente: {e}")
 
 
 # ----------------------------
