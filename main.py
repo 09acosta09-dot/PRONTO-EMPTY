@@ -80,7 +80,7 @@ SERVICE_INFO = {
         "prefix": "C",
     },
     "Motocarro": {
-        "label_user": "Motocarro",
+        "label_user": "🛺 Motocarro",
         "channel_id": CHANNEL_MOTOCARRO,
         "link": LINK_MOTOCARRO,
         "prefix": "M",
