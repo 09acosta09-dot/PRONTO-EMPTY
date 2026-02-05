@@ -33,13 +33,13 @@ if not TOKEN:
 ADMIN_IDS = [1741298723, 7076796229]
 
 # Canales por servicio (IDs numéricos)
-CHANNEL_TAXI = -1002697357566
+CHANNEL_SERVICIO ESPECIAL = -1002697357566
 CHANNEL_DOMICILIOS = -1002503403579
 CHANNEL_CAMIONETAS = -1002662309590
 CHANNEL_MOTOCARRO = -1002688723492
 
 # Links de invitación a los canales (ajusta si cambian)
-LINK_TAXI = "https://t.me/+Drczf-TdHCUzNDZh"
+LINK_SERVICIO ESPECIAL = "https://t.me/+Drczf-TdHCUzNDZh"
 LINK_DOMICILIOS = "https://t.me/+gZvnu8zolb1iOTBh"
 LINK_CAMIONETAS = "https://t.me/+KRam-XSvPQ5jNjRh"  # antes Trasteos
 LINK_MOTOCARRO = "https://t.me/+REkbglMlfxE3YjI5"
@@ -61,10 +61,10 @@ CORTE = time(15, 0)  # 3:00 p.m.
 
 # Información por servicio
 SERVICE_INFO = {
-    "Taxi": {
-        "label_user": "🚕 Taxi",
-        "channel_id": CHANNEL_TAXI,
-        "link": LINK_TAXI,
+    "Servicio Especial": {
+        "label_user": "🚕 Servicio Especial",
+        "channel_id": CHANNEL_SERVICIO ESPECIAL,
+        "link": LINK_SERVICIO ESPECIAL,
         "prefix": "T",
     },
     "Domicilios": {
@@ -190,7 +190,7 @@ main_keyboard = ReplyKeyboardMarkup(
 
 user_service_keyboard = ReplyKeyboardMarkup(
     [
-        [KeyboardButton(SERVICE_INFO["Taxi"]["label_user"])],
+        [KeyboardButton(SERVICE_INFO["Servicio Especial"]["label_user"])],
         [KeyboardButton(SERVICE_INFO["Domicilios"]["label_user"])],
         [KeyboardButton(SERVICE_INFO["Camionetas"]["label_user"])],
         [KeyboardButton(SERVICE_INFO["Motocarro"]["label_user"])],
@@ -815,7 +815,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text == "🗑 Desactivar móvil":
             context.user_data["admin_step"] = "deactivate_code"
             await update.message.reply_text(
-                "Escribe el *código del móvil* que deseas desactivar (ej: T001, D015, C010, M003):",
+                "Escribe el *código del móvil* que deseas desactivar (ej: SE001, D015, C010, M003):",
                 parse_mode="Markdown",
             )
             return
@@ -823,7 +823,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text == "💰 Aprobar pagos":
             context.user_data["admin_step"] = "approve_payment_code"
             await update.message.reply_text(
-                "Escribe el *código del móvil* cuyo pago deseas aprobar (ej: T001, D015, C010, M003):",
+                "Escribe el *código del móvil* cuyo pago deseas aprobar (ej: SE001, D015, C010, M003):",
                 parse_mode="Markdown",
             )
             return
@@ -864,8 +864,8 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if admin_step == "reg_service":
             servicio = text.strip()
-            if servicio not in ["Taxi", "Domicilios", "Camionetas", "Motocarro"]:
-                await update.message.reply_text("Servicio no válido. Escribe: Taxi, Domicilios, Camionetas o Motocarro.")
+            if servicio not in ["Servicio Especial", "Domicilios", "Camionetas", "Motocarro"]:
+                await update.message.reply_text("Servicio no válido. Escribe: Servicio Especial, Domicilios, Camionetas o Motocarro.")
                 return
             context.user_data["reg_movil"]["servicio"] = servicio
             context.user_data["admin_step"] = "reg_placa"
