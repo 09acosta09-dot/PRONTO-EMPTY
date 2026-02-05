@@ -571,7 +571,7 @@ if data.startswith("COMPLETAR|"):
         await query.edit_message_text("Este servicio no pertenece a tu móvil.")
         return
 
-    # Marcar como completado
+    # marcar completado
     servicio_data["status"] = "completado"
     servicio_data["hora_finalizacion"] = now_colombia_str()
 
@@ -584,50 +584,45 @@ if data.startswith("COMPLETAR|"):
     servicio = servicio_data.get("servicio")
     user_chat_id = servicio_data.get("user_chat_id")
 
-    # Confirmar al móvil
+    # confirmar al movil
     await query.edit_message_text(
         f"✅ Servicio {service_id} marcado como COMPLETADO.\n\n"
         f"Cliente: {nombre}\n"
         f"Destino: {destino}\n"
-        f"Hora finalización: {servicio_data['hora_finalizacion']}",
-        parse_mode="Markdown"
+        f"Hora finalización: {servicio_data['hora_finalizacion']}"
     )
 
-    # Notificar al cliente
-    try:
-        await bot.send_message(
-            chat_id=user_chat_id,
-            text=(
-                "✅ Tu servicio ha sido completado.\n\n"
-                "Gracias por usar PRONTO."
+    # notificar al cliente
+    if user_chat_id:
+        try:
+            await bot.send_message(
+                chat_id=user_chat_id,
+                text="✅ Tu servicio ha sido completado.\n\nGracias por usar PRONTO."
             )
-        )
-    except Exception:
-        pass
+        except:
+            pass
 
-    # Notificar al canal
+    # notificar al canal
     channel_id = SERVICE_INFO[servicio]["channel_id"]
 
     texto_canal = (
-        "✅ *SERVICIO COMPLETADO*\n\n"
-        f"🆔 Servicio: *{service_id}*\n"
-        f"🚗 Móvil: *{movil_codigo}*\n"
-        f"👤 Cliente: *{nombre}*\n"
-        f"📍 Destino: *{destino}*\n"
-        f"⏰ Finalizado: *{servicio_data['hora_finalizacion']}*"
+        "✅ SERVICIO COMPLETADO\n\n"
+        f"Servicio: {service_id}\n"
+        f"Movil: {movil_codigo}\n"
+        f"Cliente: {nombre}\n"
+        f"Destino: {destino}\n"
+        f"Finalizado: {servicio_data['hora_finalizacion']}"
     )
 
     try:
         await bot.send_message(
             chat_id=channel_id,
-            text=texto_canal,
-            parse_mode="Markdown"
+            text=texto_canal
         )
-    except Exception:
+    except:
         pass
 
     return
-
 
         user_chat_id = servicio_data.get("user_chat_id")
         if user_chat_id:
