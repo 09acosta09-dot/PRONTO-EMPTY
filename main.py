@@ -39,7 +39,7 @@ CHANNEL_CAMIONETAS = -1002662309590
 CHANNEL_MOTOCARRO = -1002688723492
 
 # Links de invitación a los canales (ajusta si cambian)
-LINK_SERVICIO ESPECIAL = "https://t.me/+Drczf-TdHCUzNDZh"
+LINK_SERVICIO_ESPECIAL = "https://t.me/+Drczf-TdHCUzNDZh"
 LINK_DOMICILIOS = "https://t.me/+gZvnu8zolb1iOTBh"
 LINK_CAMIONETAS = "https://t.me/+KRam-XSvPQ5jNjRh"  # antes Trasteos
 LINK_MOTOCARRO = "https://t.me/+REkbglMlfxE3YjI5"
