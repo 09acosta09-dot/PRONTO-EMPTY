@@ -539,7 +539,95 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             texto_movil += f"📦 Tipo de carga: {servicio_data.get('carga','')}\n"
         texto_movil += f"\n⏰ Hora de reserva: {servicio_data.get('hora_reserva','')} (Colombia)"
 
-        await query.edit_message_text(texto_movil, parse_mode="Markdown")
+        keyboard_complete = InlineKeyboardMarkup([
+    [InlineKeyboardButton("✅ SERVICIO CUBIERTO", callback_data=f"COMPLETAR|{service_id}")]
+])
+
+await query.edit_message_text(
+    texto_movil,
+    parse_mode="Markdown",
+    reply_markup=keyboard_complete
+)
+
+# ----------------------------
+# COMPLETAR SERVICIO
+# ----------------------------
+if data.startswith("COMPLETAR|"):
+    service_id = data.split("|", 1)[1]
+    chat_id = query.message.chat.id
+
+    services = get_services()
+    servicio_data = services.get(service_id)
+
+    if not servicio_data:
+        await query.edit_message_text("Este servicio no existe.")
+        return
+
+    if servicio_data.get("status") != "reservado":
+        await query.edit_message_text("Este servicio no está en estado reservado.")
+        return
+
+    if servicio_data.get("movil_chat_id") != chat_id:
+        await query.edit_message_text("Este servicio no pertenece a tu móvil.")
+        return
+
+    # Marcar como completado
+    servicio_data["status"] = "completado"
+    servicio_data["hora_finalizacion"] = now_colombia_str()
+
+    services[service_id] = servicio_data
+    save_services(services)
+
+    movil_codigo = servicio_data.get("movil_codigo")
+    nombre = servicio_data.get("nombre", "")
+    destino = servicio_data.get("destino", "")
+    servicio = servicio_data.get("servicio")
+    user_chat_id = servicio_data.get("user_chat_id")
+
+    # Confirmar al móvil
+    await query.edit_message_text(
+        f"✅ Servicio {service_id} marcado como COMPLETADO.\n\n"
+        f"Cliente: {nombre}\n"
+        f"Destino: {destino}\n"
+        f"Hora finalización: {servicio_data['hora_finalizacion']}",
+        parse_mode="Markdown"
+    )
+
+    # Notificar al cliente
+    try:
+        await bot.send_message(
+            chat_id=user_chat_id,
+            text=(
+                "✅ Tu servicio ha sido completado.\n\n"
+                "Gracias por usar PRONTO."
+            )
+        )
+    except Exception:
+        pass
+
+    # Notificar al canal
+    channel_id = SERVICE_INFO[servicio]["channel_id"]
+
+    texto_canal = (
+        "✅ *SERVICIO COMPLETADO*\n\n"
+        f"🆔 Servicio: *{service_id}*\n"
+        f"🚗 Móvil: *{movil_codigo}*\n"
+        f"👤 Cliente: *{nombre}*\n"
+        f"📍 Destino: *{destino}*\n"
+        f"⏰ Finalizado: *{servicio_data['hora_finalizacion']}*"
+    )
+
+    try:
+        await bot.send_message(
+            chat_id=channel_id,
+            text=texto_canal,
+            parse_mode="Markdown"
+        )
+    except Exception:
+        pass
+
+    return
+
 
         user_chat_id = servicio_data.get("user_chat_id")
         if user_chat_id:
