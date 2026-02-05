@@ -63,8 +63,8 @@ CORTE = time(15, 0)  # 3:00 p.m.
 SERVICE_INFO = {
     "Servicio Especial": {
         "label_user": "🚕 Servicio Especial",
-        "channel_id": CHANNEL_SERVICIO ESPECIAL,
-        "link": LINK_SERVICIO ESPECIAL,
+        "channel_id": CHANNEL_SERVICIO_ESPECIAL,
+        "link": LINK_SERVICIO_ESPECIAL,
         "prefix": "T",
     },
     "Domicilios": {
