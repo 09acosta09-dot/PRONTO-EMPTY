@@ -634,7 +634,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown",
         )
         return
-         if data.startswith("COMPLETADO|"):
+        
+        if data.startswith("COMPLETADO|"):
         service_id = data.split("|")[1]
 
         services = get_services()
