@@ -551,19 +551,19 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                )
 
 
-        user_chat_id = servicio_data.get("user_chat_id")
-        if user_chat_id:
-            try:
-                await bot.send_message(
-                    chat_id=user_chat_id,
-                    text=(
-                        f"✅ Tu servicio ha sido asignado.\n\n"
-                        f"El móvil *{movil_codigo}* llegará pronto.\n"
-                        f"Por favor mantén tu teléfono disponible."
-                    ),
-                    parse_mode="Markdown",
-                )
-            except Exception:
+               user_chat_id = servicio_data.get("user_chat_id")
+               if user_chat_id:
+                  try:
+                      await bot.send_message(
+                          chat_id=user_chat_id,
+                          text=(
+                              f"✅ Tu servicio ha sido asignado.\n\n"
+                              f"El móvil *{movil_codigo}* llegará pronto.\n"
+                              f"Por favor mantén tu teléfono disponible."
+                          ),
+                          parse_mode="Markdown",
+                      )
+                  except Exception:
                 pass
 
         servicio = servicio_data.get("servicio")
