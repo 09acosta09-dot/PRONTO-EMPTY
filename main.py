@@ -539,7 +539,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             texto_movil += f"📦 Tipo de carga: {servicio_data.get('carga','')}\n"
         texto_movil += f"\n⏰ Hora de reserva: {servicio_data.get('hora_reserva','')} (Colombia)"
 
-        await query.edit_message_text(texto_movil, parse_mode="Markdown")
+        # Crear botón de servicio completado
+               keyboard = InlineKeyboardMarkup(
+                   [[InlineKeyboardButton("✅ Servicio completado", callback_data=f"COMPLETADO|{service_id}")]]
+               )
+
+               await query.edit_message_text(
+                   texto_movil,
+                   parse_mode="Markdown",
+                   reply_markup=keyboard
+               )
+
 
         user_chat_id = servicio_data.get("user_chat_id")
         if user_chat_id:
@@ -625,7 +635,47 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown",
         )
         return
+         if data.startswith("COMPLETADO|"):
+        service_id = data.split("|")[1]
 
+        services = get_services()
+        servicio_data = services.get(service_id)
+
+        if not servicio_data:
+            await query.edit_message_text("Servicio no encontrado.")
+            return
+
+        if servicio_data.get("status") == "completado":
+            await query.edit_message_text("Este servicio ya fue completado.")
+            return
+
+        servicio_data["status"] = "completado"
+        servicio_data["hora_completado"] = now_colombia_str()
+
+        services[service_id] = servicio_data
+        save_services(services)
+
+        movil_codigo = servicio_data.get("movil_codigo", "")
+
+        await query.edit_message_text(
+            f"✅ Servicio {service_id} marcado como COMPLETADO.\n"
+            f"🚗 Móvil: {movil_codigo}\n"
+            f"⏰ Hora: {servicio_data['hora_completado']}"
+        )
+
+        # Notificar al cliente
+        user_chat_id = servicio_data.get("user_chat_id")
+
+        if user_chat_id:
+            try:
+                await bot.send_message(
+                    chat_id=user_chat_id,
+                    text="✅ Tu servicio ha sido completado. Gracias por usar PRONTO."
+                )
+            except:
+                pass
+
+        return
 
 # ----------------------------
 # MANEJO DE TEXTO
