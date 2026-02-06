@@ -540,30 +540,29 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         texto_movil += f"\n⏰ Hora de reserva: {servicio_data.get('hora_reserva','')} (Colombia)"
 
         # Crear botón de servicio completado
-               keyboard = InlineKeyboardMarkup(
-                   [[InlineKeyboardButton("✅ Servicio completado", callback_data=f"COMPLETADO|{service_id}")]]
-               )
+        keyboard = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("✅ Servicio completado", callback_data=f"COMPLETADO|{service_id}")]]
+        )
 
-               await query.edit_message_text(
-                   texto_movil,
-                   parse_mode="Markdown",
-                   reply_markup=keyboard
-               )
+        await query.edit_message_text(
+            texto_movil,
+            parse_mode="Markdown",
+            reply_markup=keyboard
+        )
 
-
-               user_chat_id = servicio_data.get("user_chat_id")
-               if user_chat_id:
-                  try:
-                      await bot.send_message(
-                          chat_id=user_chat_id,
-                          text=(
-                              f"✅ Tu servicio ha sido asignado.\n\n"
-                              f"El móvil *{movil_codigo}* llegará pronto.\n"
-                              f"Por favor mantén tu teléfono disponible."
-                          ),
-                          parse_mode="Markdown",
-                      )
-                  except Exception:
+        user_chat_id = servicio_data.get("user_chat_id")
+        if user_chat_id:
+            try:
+                await bot.send_message(
+                    chat_id=user_chat_id,
+                    text=(
+                        f"✅ Tu servicio ha sido asignado.\n\n"
+                        f"El móvil *{movil_codigo}* llegará pronto.\n"
+                        f"Por favor mantén tu teléfono disponible."
+                    ),
+                    parse_mode="Markdown",
+                )
+            except Exception:
                 pass
 
         servicio = servicio_data.get("servicio")
