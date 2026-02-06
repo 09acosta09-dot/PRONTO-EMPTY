@@ -636,31 +636,31 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
         if data.startswith("COMPLETADO|"):
-        service_id = data.split("|")[1]
+            service_id = data.split("|")[1]
 
-        services = get_services()
-        servicio_data = services.get(service_id)
+            services = get_services()
+            servicio_data = services.get(service_id)
 
-        if not servicio_data:
-            await query.edit_message_text("Servicio no encontrado.")
-            return
+            if not servicio_data:
+                await query.edit_message_text("Servicio no encontrado.")
+                return
 
-        if servicio_data.get("status") == "completado":
-            await query.edit_message_text("Este servicio ya fue completado.")
-            return
+            if servicio_data.get("status") == "completado":
+                await query.edit_message_text("Este servicio ya fue completado.")
+                return
 
-        servicio_data["status"] = "completado"
-        servicio_data["hora_completado"] = now_colombia_str()
+            servicio_data["status"] = "completado"
+            servicio_data["hora_completado"] = now_colombia_str()
 
-        services[service_id] = servicio_data
-        save_services(services)
+            services[service_id] = servicio_data
+            save_services(services)
 
-        movil_codigo = servicio_data.get("movil_codigo", "")
+            movil_codigo = servicio_data.get("movil_codigo", "")
 
-        await query.edit_message_text(
-            f"✅ Servicio {service_id} marcado como COMPLETADO.\n"
-            f"🚗 Móvil: {movil_codigo}\n"
-            f"⏰ Hora: {servicio_data['hora_completado']}"
+            await query.edit_message_text(
+                f"✅ Servicio {service_id} marcado como COMPLETADO.\n"
+                f"🚗 Móvil: {movil_codigo}\n"
+                f"⏰ Hora: {servicio_data['hora_completado']}"
         )
 
         # Notificar al cliente
