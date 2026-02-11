@@ -1224,13 +1224,8 @@ def main():
     application.add_handler(MessageHandler(filters.LOCATION, location_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=int(os.environ.get("PORT", 8443)),
-        url_path=WEBHOOK_PATH,
-        webhook_url=WEBHOOK_URL,
-    )
-
+   print("Bot PRONTO iniciado correctamente...")
+application.run_polling()
 
 if __name__ == "__main__":
     main()
