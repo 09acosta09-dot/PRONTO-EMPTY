@@ -1224,8 +1224,9 @@ def main():
     application.add_handler(MessageHandler(filters.LOCATION, location_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
-   print("Bot PRONTO iniciado correctamente...")
-application.run_polling()
+    print("Bot PRONTO iniciado correctamente...")
+    application.run_polling()
+
 
 if __name__ == "__main__":
     main()
