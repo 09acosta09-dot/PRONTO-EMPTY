@@ -936,7 +936,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data["reg_movil"]["cedula"] = text
             context.user_data["admin_step"] = "reg_service"
             await update.message.reply_text(
-                "🚗 Indica el *tipo de servicio* del móvil:\n- Servicio_Especial\n- Domicilios\n- Camionetas\n- Motocarro\n\nEscríbelo tal cual.",
+                "🚗 Indica el *tipo de servicio* del móvil:\n- Servicio Especial\n- Domicilios\n- Camionetas\n- Motocarro\n\nEscríbelo tal cual.",
                 parse_mode="Markdown",
             )
             return
