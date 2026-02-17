@@ -489,6 +489,27 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     bot = context.bot
 
+# ----------------------------
+# SERVICIO COMPLETADO
+# ----------------------------
+if data == "servicio_completado":
+
+    chat_id = query.message.chat.id
+
+    await query.edit_message_text(
+        "✅ Servicio marcado como completado.\n\nQuedas disponible para nuevos servicios."
+    )
+
+    # NOTIFICAR ADMIN (CAMBIA ESTE ID)
+    ADMIN_ID = [1741298723, 7076796229]
+
+    await bot.send_message(
+        chat_id=ADMIN_ID,
+        text=f"📦 El móvil {chat_id} ha completado un servicio."
+    )
+
+    return
+
     if data.startswith("RESERVAR|"):
         service_id = data.split("|", 1)[1]
         chat_id = query.message.chat.id
