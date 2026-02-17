@@ -663,6 +663,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"⏰ Hora: {servicio_data['hora_completado']}"
         )
 
+         # NOTIFICAR AL ADMIN (CAMBIA ESTE ID)
+        ADMIN_ID = 7076796229  # ← coloca tu ID de Telegram
+
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text="📦 Un móvil ha completado un servicio."
+        )
+
         # Notificar al cliente
         user_chat_id = servicio_data.get("user_chat_id")
 
