@@ -739,7 +739,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["mode"] = "movil_auth"
         context.user_data["movil_step"] = "ask_code"
         await update.message.reply_text(
-            "🔐 Por favor escribe tu *código de móvil* (ej: T001, D005, C010, E003):",
+            "🔐 Por favor escribe tu *código de móvil* (ej: SE001, D005, C010, M003):",
             parse_mode="Markdown",
         )
         return
