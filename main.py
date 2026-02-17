@@ -65,7 +65,7 @@ SERVICE_INFO = {
         "label_user": "🚕 Servicio Especial",
         "channel_id": CHANNEL_SERVICIO_ESPECIAL,
         "link": LINK_SERVICIO_ESPECIAL,
-        "prefix": "T",
+        "prefix": "SE",
     },
     "Domicilios": {
         "label_user": "📦 Domicilios",
