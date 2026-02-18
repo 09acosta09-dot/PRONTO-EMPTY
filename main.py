@@ -25,9 +25,9 @@ from telegram.ext import (
 # CONFIGURACIÓN
 # ----------------------------
 
-TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = os.getenv("TU_TOKEN_NUEVO")
 if not TOKEN:
-    raise RuntimeError("La variable de entorno BOT_TOKEN no está configurada.")
+    raise RuntimeError("La variable de entorno TU_TOKEN_NUEVO no está configurada.")
 
 # SOLO estos IDs pueden ver el menú de administrador
 ADMIN_IDS = [1741298723, 7076796229]
