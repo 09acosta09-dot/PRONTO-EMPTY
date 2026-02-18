@@ -534,9 +534,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("Este servicio ya no está disponible o ha sido eliminado.")
             return
 
-        if servicio_data.get("status") != "pendiente":
+        if servicio_data.get("status") == "reservado":
             await query.edit_message_text("Este servicio ya fue tomado por otro móvil.")
             return
+
 
         movil_chat_id = servicio_data.get("movil_chat_id")
         movil_codigo = servicio_data.get("movil_codigo")
