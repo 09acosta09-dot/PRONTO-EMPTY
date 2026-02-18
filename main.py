@@ -561,9 +561,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         texto_movil += f"\n⏰ Hora de reserva: {servicio_data.get('hora_reserva','')} (Colombia)"
 
         # Crear botón de servicio completado
-        keyboard = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("✅ Servicio completado", callback_data=f"COMPLETADO|{service_id}")]]
-        )
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ SERVICIO COMPLETADO", callback_data=f"servicio_completado_{servicio_id}")],
+            [InlineKeyboardButton("❌ CANCELAR SERVICIO", callback_data=f"cancelar_servicio_{servicio_id}")]
+        ])
+
 
         await query.edit_message_text(
             texto_movil,
@@ -689,6 +691,21 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("✅ Servicio marcado como completado.")
             return
 
+        if query.data.startswith("cancelar_servicio"):
+            servicio_id = int(query.data.split("_")[2])
+
+            servicio = servicios_activos.get(servicio_id)
+            if not servicio:
+                await query.answer("Servicio no encontrado.")
+                return
+
+            context.user_data["cancelando_servicio"] = servicio_id
+
+            await query.message.reply_text(
+                "❌ Indica el motivo de la cancelación:"
+            )
+
+            return
 
 # ----------------------------
 # MANEJO DE TEXTO
@@ -702,6 +719,36 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
     user_id_str = str(user_id)
+    
+    # Cancelación pendiente
+    if "cancelando_servicio" in context.user_data:
+        servicio_id = context.user_data["cancelando_servicio"]
+        motivo = text
+
+        servicio = servicios_activos.get(servicio_id)
+        if servicio:
+            cliente_id = servicio["cliente_id"]
+            admin_id = ADMIN_ID
+
+            # Notificar cliente
+            await context.bot.send_message(
+                chat_id=cliente_id,
+                text=f"❌ Tu servicio fue cancelado.\nMotivo:\n{motivo}"
+            )
+
+            # Notificar admin
+            await context.bot.send_message(
+                chat_id=admin_id,
+                text=f"🚨 Servicio #{servicio_id} CANCELADO.\n"
+                     f"Motivo: {motivo}"
+            )
+
+            servicios_activos.pop(servicio_id)
+
+        del context.user_data["cancelando_servicio"]
+
+        await update.message.reply_text("Servicio cancelado correctamente.")
+        return
 
     # Volver al inicio desde cualquier flujo
     if text == "⬅ Volver al inicio":
