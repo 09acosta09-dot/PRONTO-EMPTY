@@ -657,37 +657,37 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
         if query.data.startswith("servicio_completado"):
-    servicio_id = int(query.data.split("_")[2])
+            servicio_id = int(query.data.split("_")[2])
 
-    servicio = servicios_activos.get(servicio_id)
-    if not servicio:
-        await query.answer("Servicio no encontrado.")
-        return
+            servicio = servicios_activos.get(servicio_id)
+            if not servicio:
+               await query.answer("Servicio no encontrado.")
+               return
 
-    cliente_id = servicio["cliente_id"]
-    admin_id = ADMIN_ID  # asegúrate que tengas ADMIN_ID definido
+            cliente_id = servicio["cliente_id"]
+            admin_id = ADMIN_ID  # asegúrate que tengas ADMIN_ID definido
 
-    servicio["estado"] = "completado"
+            servicio["estado"] = "completado"
 
-    # Notificar cliente
-    await context.bot.send_message(
-        chat_id=cliente_id,
-        text="✅ Tu servicio ha sido marcado como COMPLETADO.\nGracias por usar nuestro servicio."
-    )
+            # Notificar cliente
+            await context.bot.send_message(
+                chat_id=cliente_id,
+                text="✅ Tu servicio ha sido marcado como COMPLETADO.\nGracias por usar nuestro servicio."
+            )
 
-    # Notificar admin
-    await context.bot.send_message(
-        chat_id=admin_id,
-        text=f"📦 Servicio #{servicio_id} completado.\n"
-             f"👤 Cliente: {servicio.get('cliente_nombre')}\n"
-             f"🚗 Móvil: {servicio.get('movil_nombre')}"
-    )
+            # Notificar admin
+            await context.bot.send_message(
+                chat_id=admin_id,
+                text=f"📦 Servicio #{servicio_id} completado.\n"
+                     f"👤 Cliente: {servicio.get('cliente_nombre')}\n"
+                     f"🚗 Móvil: {servicio.get('movil_nombre')}"
+            )
 
-    # Eliminar de activos
-    servicios_activos.pop(servicio_id)
+            # Eliminar de activos
+            servicios_activos.pop(servicio_id)
 
-    await query.edit_message_text("✅ Servicio marcado como completado.")
-    return
+            await query.edit_message_text("✅ Servicio marcado como completado.")
+            return
 
 
 # ----------------------------
