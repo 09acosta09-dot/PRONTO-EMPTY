@@ -496,7 +496,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         service_id = data.split("_")[2]
 
-        services = load_services()
+        services = get_services()
 
         if service_id in services:
 
