@@ -494,32 +494,32 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ----------------------------
     if data.startswith("servicio_completado_"):
 
-    service_id = data.split("_")[2]
+        service_id = data.split("_")[2]
 
-    services = load_services()
+        services = load_services()
 
-    if service_id in services:
+        if service_id in services:
 
-        services[service_id]["status"] = "completado"
-        save_services(services)
+            services[service_id]["status"] = "completado"
+            save_services(services)
 
-        cliente_id = services[service_id].get("cliente_id")
+            cliente_id = services[service_id].get("cliente_id")
 
-        if cliente_id:
-            await context.bot.send_message(
-                chat_id=cliente_id,
-                text="✅ Tu servicio ha sido completado."
-            )
+            if cliente_id:
+                await context.bot.send_message(
+                    chat_id=cliente_id,
+                    text="✅ Tu servicio ha sido completado."
+                )
 
-        for admin in ADMIN_IDS:
-            await context.bot.send_message(
-                chat_id=admin,
-                text=f"✅ Servicio {service_id} completado."
-            )
+            for admin in ADMIN_IDS:
+                await context.bot.send_message(
+                    chat_id=admin,
+                    text=f"✅ Servicio {service_id} completado."
+                )
 
-    await query.edit_message_text("✅ Servicio marcado como completado.")
+        await query.edit_message_text("✅ Servicio marcado como completado.")
 
-    return
+        return
 
 
     if data.startswith("RESERVAR|"):
