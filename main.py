@@ -704,7 +704,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("✅ Servicio marcado como completado.")
             return
 
-        if query.data.startswith("cancelar_servicio"):
+        if query.data.startswith("cancelar_servicio_"):
             servicio_id = int(query.data.split("_")[2])
 
             servicio = servicios_activos.get(servicio_id)
@@ -1289,7 +1289,13 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ----------------------------
 
 def main():
-    application = ApplicationBuilder().token(TOKEN).build()
+    application = (
+        ApplicationBuilder()
+        .token(TOKEN)
+        .concurrent_updates(False)
+        .build()
+    )
+
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("soy_movil", soy_movil_command))
@@ -1298,7 +1304,7 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
     print("Bot PRONTO iniciado correctamente...")
-    application.run_polling(drop_pending_updates=True, close_loop=False)
+    application.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
 
 
 
