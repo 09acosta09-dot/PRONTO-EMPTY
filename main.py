@@ -656,55 +656,39 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
         
-        if data.startswith("COMPLETADO|"):
-            service_id = data.split("|")[1]
+        if query.data.startswith("servicio_completado"):
+    servicio_id = int(query.data.split("_")[2])
 
-            services = get_services()
-            servicio_data = services.get(service_id)
-
-            if not servicio_data:
-                await query.edit_message_text("Servicio no encontrado.")
-                return
-
-            if servicio_data.get("status") == "completado":
-                await query.edit_message_text("Este servicio ya fue completado.")
-                return
-
-            servicio_data["status"] = "completado"
-            servicio_data["hora_completado"] = now_colombia_str()
-
-            services[service_id] = servicio_data
-            save_services(services)
-
-            movil_codigo = servicio_data.get("movil_codigo", "")
-
-            await query.edit_message_text(
-                f"✅ Servicio {service_id} marcado como COMPLETADO.\n"
-                f"🚗 Móvil: {movil_codigo}\n"
-                f"⏰ Hora: {servicio_data['hora_completado']}"
-        )
-
-         # NOTIFICAR AL ADMIN (CAMBIA ESTE ID)
-        ADMIN_ID = 7076796229  # ← coloca tu ID de Telegram
-
-        await context.bot.send_message(
-            chat_id=ADMIN_ID,
-            text="📦 Un móvil ha completado un servicio."
-        )
-
-        # Notificar al cliente
-        user_chat_id = servicio_data.get("user_chat_id")
-
-        if user_chat_id:
-            try:
-                await bot.send_message(
-                    chat_id=user_chat_id,
-                    text="✅ Tu servicio ha sido completado. Gracias por usar PRONTO."
-                )
-            except:
-                pass
-
+    servicio = servicios_activos.get(servicio_id)
+    if not servicio:
+        await query.answer("Servicio no encontrado.")
         return
+
+    cliente_id = servicio["cliente_id"]
+    admin_id = ADMIN_ID  # asegúrate que tengas ADMIN_ID definido
+
+    servicio["estado"] = "completado"
+
+    # Notificar cliente
+    await context.bot.send_message(
+        chat_id=cliente_id,
+        text="✅ Tu servicio ha sido marcado como COMPLETADO.\nGracias por usar nuestro servicio."
+    )
+
+    # Notificar admin
+    await context.bot.send_message(
+        chat_id=admin_id,
+        text=f"📦 Servicio #{servicio_id} completado.\n"
+             f"👤 Cliente: {servicio.get('cliente_nombre')}\n"
+             f"🚗 Móvil: {servicio.get('movil_nombre')}"
+    )
+
+    # Eliminar de activos
+    servicios_activos.pop(servicio_id)
+
+    await query.edit_message_text("✅ Servicio marcado como completado.")
+    return
+
 
 # ----------------------------
 # MANEJO DE TEXTO
