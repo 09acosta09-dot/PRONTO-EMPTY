@@ -563,8 +563,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Crear botón de servicio completado
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✅ SERVICIO COMPLETADO", callback_data=f"servicio_completado_{servicio_id}")],
-            [InlineKeyboardButton("❌ CANCELAR SERVICIO", callback_data=f"cancelar_servicio_{servicio_id}")]
+            [InlineKeyboardButton("✅ SERVICIO COMPLETADO", callback_data=f"servicio_completado_{service_id}")],
+            [InlineKeyboardButton("❌ CANCELAR SERVICIO", callback_data=f"cancelar_servicio_{service_id}")]
         ])
 
 
