@@ -767,6 +767,29 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
             # Eliminar servicio
+            # Determinar canal según tipo de servicio
+            canales = {
+                "Domicilios": -1002503403579,
+                "Servicio Especial": -1002697357566,
+                "Camionetas": -1002662309590,
+                "Motocarro": -1002688723492
+            }
+
+            tipo_servicio = servicio.get("servicio")
+            canal_id = canales.get(tipo_servicio)
+
+            if canal_id:
+                quien_cancelo = "Cliente" if user_id == servicio["cliente_id"] else "Móvil"
+
+                await context.bot.send_message(
+                    chat_id=canal_id,
+                    text=f"🚨 SERVICIO CANCELADO\n\n"
+                         f"Servicio #{servicio_id}\n"
+                         f"Tipo: {tipo_servicio}\n"
+                         f"Cancelado por: {quien_cancelo}\n"
+                         f"Motivo:\n{motivo}"
+                )
+
             del services[servicio_id]
             save_services(services)
 
