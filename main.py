@@ -746,8 +746,11 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         servicio_id = context.user_data["cancelando_servicio"]
         motivo = text
 
-        servicio = servicios_activos.get(servicio_id)
-        if servicio:
+        services = get_services()
+
+        if servicio_id in services:
+            servicio = services[servicio_id]
+
             cliente_id = servicio["cliente_id"]
             admin_id = ADMIN_ID
 
@@ -760,15 +763,16 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Notificar admin
             await context.bot.send_message(
                 chat_id=admin_id,
-                text=f"🚨 Servicio #{servicio_id} CANCELADO.\n"
-                     f"Motivo: {motivo}"
+                text=f"🚨 Servicio #{servicio_id} CANCELADO.\nMotivo: {motivo}"
             )
 
-            servicios_activos.pop(servicio_id)
+            # Eliminar servicio
+            del services[servicio_id]
+            save_services(services)
 
         del context.user_data["cancelando_servicio"]
 
-        await update.message.reply_text("Servicio cancelado correctamente.")
+        await update.message.reply_text("✅ Servicio cancelado correctamente.")
         return
 
     # Volver al inicio desde cualquier flujo
