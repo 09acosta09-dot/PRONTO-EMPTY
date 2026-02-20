@@ -288,7 +288,7 @@ def asignar_codigo_movil(servicio: str) -> str:
         codigo = m.get("codigo", "")
         if codigo.startswith(prefix):
             try:
-                numeros.append(int(codigo[1:]))
+                numeros.append(int(codigo[len(prefix):]))
             except ValueError:
                 continue
 
