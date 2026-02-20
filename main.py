@@ -753,51 +753,79 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             cliente_id = servicio["cliente_id"]
             admin_id = ADMIN_ID
+            user_id = update.effective_user.id
+
+            # Mapeo flexible de servicios a canales
+            canales = {
+                "domicilios": -1002503403579,
+                "servicio especial": -1002697357566,
+                "camionetas": -1002662309590,
+                "motocarro": -1002688723492
+            }
+
+            tipo_servicio = servicio.get("servicio", "").lower()
+
+            canal_id = None
+            for clave, canal in canales.items():
+                if clave in tipo_servicio:
+                    canal_id = canal
+                    break
+
+            quien_cancelo = "Cliente" if user_id == cliente_id else "Móvil"
 
             # Notificar cliente
             await context.bot.send_message(
                 chat_id=cliente_id,
-                text=f"❌ Tu servicio fue cancelado.\nMotivo:\n{motivo}"
+                text=f"❌ Tu servicio fue cancelado.\n\nMotivo:\n{motivo}"
             )
 
             # Notificar admin
             await context.bot.send_message(
                 chat_id=admin_id,
-                text=f"🚨 Servicio #{servicio_id} CANCELADO.\nMotivo: {motivo}"
+                text=f"🚨 Servicio #{servicio_id} CANCELADO\n"
+                     f"Cancelado por: {quien_cancelo}\n"
+                     f"Motivo:\n{motivo}"
             )
 
-            # Eliminar servicio
-            # Determinar canal según tipo de servicio
-            canales = {
-                "Domicilios": -1002503403579,
-                "Servicio Especial": -1002697357566,
-                "Camionetas": -1002662309590,
-                "Motocarro": -1002688723492
-            }
-
-            tipo_servicio = servicio.get("servicio")
-            canal_id = canales.get(tipo_servicio)
-
+            # Notificar canal correspondiente
             if canal_id:
-                quien_cancelo = "Cliente" if user_id == servicio["cliente_id"] else "Móvil"
-
                 await context.bot.send_message(
                     chat_id=canal_id,
                     text=f"🚨 SERVICIO CANCELADO\n\n"
                          f"Servicio #{servicio_id}\n"
-                         f"Tipo: {tipo_servicio}\n"
+                         f"Tipo: {servicio.get('servicio')}\n"
                          f"Cancelado por: {quien_cancelo}\n"
                          f"Motivo:\n{motivo}"
                 )
 
-            del services[servicio_id]
+            # Si cancela el cliente → eliminar servicio
+            if user_id == cliente_id:
+                del services[servicio_id]
+
+            # Si cancela el móvil → reactivar servicio
+            else:
+                servicio["status"] = "pendiente"
+                servicio["movil_chat_id"] = None
+                servicio["movil_codigo"] = None
+                services[servicio_id] = servicio
+
+                # Reenviar al canal como disponible nuevamente
+                if canal_id:
+                    await context.bot.send_message(
+                        chat_id=canal_id,
+                        text=f"🔁 SERVICIO DISPONIBLE NUEVAMENTE\n\n"
+                             f"Servicio #{servicio_id}\n"
+                             f"Tipo: {servicio.get('servicio')}\n"
+                             f"Destino: {servicio.get('direccion', '')}\n\n"
+                             f"Disponible para tomar."
+                    )
+
             save_services(services)
 
         del context.user_data["cancelando_servicio"]
 
         await update.message.reply_text("✅ Servicio cancelado correctamente.")
         return
-
     # Volver al inicio desde cualquier flujo
     if text == "⬅ Volver al inicio":
         context.user_data.clear()
