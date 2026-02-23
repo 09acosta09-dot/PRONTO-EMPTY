@@ -38,6 +38,7 @@ CHANNEL_DOMICILIOS = -1002503403579
 CHANNEL_CAMIONETAS = -1002662309590
 CHANNEL_MOTOCARRO = -1002688723492
 
+BACKUP_CHANNEL_ID = int(os.getenv("BACKUP_CHANNEL_ID"))
 # Links de invitación a los canales (ajusta si cambian)
 LINK_SERVICIO_ESPECIAL = "https://t.me/+Drczf-TdHCUzNDZh"
 LINK_DOMICILIOS = "https://t.me/+gZvnu8zolb1iOTBh"
@@ -127,7 +128,16 @@ def get_services():
 def save_services(data):
     save_json(SERVICES_FILE, data)
 
-
+async def backup_file(context, filename):
+    try:
+        with open(filename, "rb") as f:
+            await context.bot.send_document(
+                chat_id=BACKUP_CHANNEL_ID,
+                document=f,
+                filename=f"BACKUP_{filename}"
+            )
+    except Exception as e:
+        print(f"Error en backup: {e}")
 # ----------------------------
 # UTILIDADES DE TIEMPO Y DISTANCIA
 # ----------------------------
@@ -682,7 +692,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if query.data.startswith("servicio_completado"):
             servicio_id = int(query.data.split("_")[2])
 
-            servicio = servicios_activos.get(servicio_id)
+            services = get_services()
+            servicio = services.get(servicio_id)
             if not servicio:
                await query.answer("Servicio no encontrado.")
                return
@@ -707,7 +718,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
             # Eliminar de activos
-            servicios_activos.pop(servicio_id)
+            services.pop(servicio_id)
+            save_services(services)
 
             await query.edit_message_text("✅ Servicio marcado como completado.")
             return
