@@ -534,14 +534,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return
         
-    elif data.startswith("cancelar_"):
-        servicio_id = data.split("_")[1]
-
-        context.user_data["cancelando_servicio"] = servicio_id
-
-        await query.edit_message_text(
-            "✍️ Escribe el motivo de la cancelación:"
-        )
 
     if data.startswith("RESERVAR|"):
         service_id = data.split("|", 1)[1]
@@ -637,6 +629,21 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await bot.send_message(chat_id=channel_id, text=resumen, parse_mode="Markdown")
         except Exception:
             pass
+
+        return
+
+     # ----------------------------
+    # CANCELAR SERVICIO
+    # ----------------------------
+    if data.startswith("cancelar_servicio_"):
+
+        service_id = data.split("_")[2]
+
+        context.user_data["cancelando_servicio"] = service_id
+
+        await query.edit_message_text(
+            "✍️ Escribe el motivo de la cancelación:"
+        )
 
         return
 
