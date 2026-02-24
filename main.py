@@ -504,20 +504,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ----------------------------
     # VOLVER AL INICIO
     # ----------------------------
-    if data == "algo":
-
-        # Limpiar estados activos
-        context.user_data.pop("admin_step", None)
-        context.user_data.pop("movil_step", None)
-        context.user_data.pop("cancelando_servicio", None)
-        context.user_data.pop("reg_movil", None)
-        context.user_data.pop("mode", None)
+    # 🔙 VOLVER AL INICIO
+    if data == "volver_inicio":
+        context.user_data.clear()
 
         await query.edit_message_text(
-            "🏠 Menú principal",
-            reply_markup=menu_principal()
+            "🏠 Menú principal\n\nElige una opción:"
         )
-
         return
 
     # ----------------------------
@@ -901,6 +894,11 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ------------------- MÓVIL (MENÚ PRINCIPAL) -------------------
     if mode == "movil":
+        if text == "🔙 Volver al inicio":
+            context.user_data.clear()
+            await start(update, context)
+            return
+            
         mobiles = get_mobiles()
         m = mobiles.get(user_id_str)
 
@@ -970,6 +968,11 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ------------------- ADMINISTRADOR -------------------
     if mode == "admin" and user_id in ADMIN_IDS:
         admin_step = context.user_data.get("admin_step")
+        
+        if text == "🔙 Volver al inicio":
+            context.user_data.clear()
+            await mostrar_menu_principal(update, context)
+            return
 
         if text == "📲 Registrar móvil":
             context.user_data["admin_step"] = "reg_name"
