@@ -770,6 +770,13 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     text = update.message.text.strip()
+    
+    # 🔙 VOLVER AL INICIO GLOBAL
+    if text == "🔙 Volver al inicio":
+        context.user_data.clear()
+        await start(update, context)
+        return
+        
     user = update.effective_user
     user_id = user.id
     user_id_str = str(user_id)
