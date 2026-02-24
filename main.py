@@ -203,10 +203,10 @@ main_keyboard = ReplyKeyboardMarkup(
 
 user_service_keyboard = ReplyKeyboardMarkup(
     [
-        [KeyboardButton(SERVICE_INFO["Servicio Especial"]["label_user"])],
-        [KeyboardButton(SERVICE_INFO["Domicilios"]["label_user"])],
         [KeyboardButton(SERVICE_INFO["Camionetas"]["label_user"])],
+        [KeyboardButton(SERVICE_INFO["Servicio Especial"]["label_user"])],
         [KeyboardButton(SERVICE_INFO["Motocarro"]["label_user"])],
+        [KeyboardButton(SERVICE_INFO["Domicilios"]["label_user"])],
         [KeyboardButton("⬅ Volver al inicio")],
     ],
     resize_keyboard=True,
