@@ -501,6 +501,24 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
     bot = context.bot
+    # ----------------------------
+    # VOLVER AL INICIO
+    # ----------------------------
+    if data == "algo":
+
+        # Limpiar estados activos
+        context.user_data.pop("admin_step", None)
+        context.user_data.pop("movil_step", None)
+        context.user_data.pop("cancelando_servicio", None)
+        context.user_data.pop("reg_movil", None)
+        context.user_data.pop("mode", None)
+
+        await query.edit_message_text(
+            "🏠 Menú principal",
+            reply_markup=menu_principal()
+        )
+
+        return
 
     # ----------------------------
     # SERVICIO COMPLETADO
