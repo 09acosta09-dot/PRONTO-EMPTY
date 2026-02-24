@@ -48,8 +48,11 @@ LINK_MOTOCARRO = "https://t.me/+REkbglMlfxE3YjI5"
 # Número de Nequi del administrador (CÁMBIALO POR EL REAL)
 NEQUI_NUMBER = "3052915231"
 
-MOBILES_FILE = "mobiles.json"
-SERVICES_FILE = "services.json"
+DATA_DIR = "/data"
+os.makedirs(DATA_DIR, exist_ok=True)
+
+MOBILES_FILE = os.path.join(DATA_DIR, "mobiles.json")
+SERVICES_FILE = os.path.join(DATA_DIR, "services.json")
 
 # Dominio Railway para el webhook
 WEBHOOK_DOMAIN = "https://pronto-empty-production.up.railway.app"
