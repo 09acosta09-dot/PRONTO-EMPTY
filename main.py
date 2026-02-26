@@ -228,6 +228,7 @@ admin_keyboard = ReplyKeyboardMarkup(
         [KeyboardButton("📲 Registrar móvil")],
         [KeyboardButton("🚗 Ver móviles registrados")],
         [KeyboardButton("🗑 Desactivar móvil")],
+        [KeyboardButton("🗑 Eliminar móvil")],
         [KeyboardButton("💰 Aprobar pagos")],
         [KeyboardButton("📋 Ver servicios activos")],
         [KeyboardButton("⬅ Volver al inicio")],
@@ -1005,7 +1006,27 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 lines.append(f"- {codigo} – {nombre} – {servicio} – {activo} – {pago}")
             await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
             return
+            
+            # 🗑 ELIMINAR MÓVIL
+        if text == "🗑 Eliminar móvil":
 
+            mobiles = get_mobiles()
+
+            if not mobiles:
+                await update.message.reply_text("No hay móviles registrados.")
+                return
+
+            lista = "📋 Móviles registrados:\n\n"
+            for chat_id, m in mobiles.items():
+                lista += f"• {m.get('codigo','Sin código')} - {m.get('nombre','Sin nombre')}\n"
+
+            lista += "\nEscribe el *CÓDIGO* del móvil que deseas eliminar:"
+
+            context.user_data["admin_step"] = "eliminar_movil"
+
+            await update.message.reply_text(lista, parse_mode="Markdown")
+            return
+            
         if text == "🗑 Desactivar móvil":
             context.user_data["admin_step"] = "deactivate_code"
             await update.message.reply_text(
@@ -1081,6 +1102,33 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if admin_step == "reg_modelo":
             context.user_data["reg_movil"]["modelo"] = text
             reg = context.user_data.get("reg_movil", {})
+
+        if admin_step == "eliminar_movil":
+            
+            codigo_ingresado = text.strip().upper()
+            
+            mobiles = get_mobiles()
+
+            target_chat_id = None
+
+            for chat_id, m in mobiles.items():
+                if m.get("codigo","").upper() == codigo_ingresado:
+                    target_chat_id = chat_id
+                    break
+
+            if not target_chat_id:
+                await update.message.reply_text("❌ No encontré un móvil con ese código.")
+                return
+
+            # Eliminar móvil
+            nombre = mobiles[target_chat_id].get("nombre","")
+            del mobiles[target_chat_id]
+            save_mobiles(mobiles)
+
+            await update.message.reply_text(f"🗑 Móvil {nombre} eliminado correctamente.")
+
+            context.user_data.pop("admin_step", None)
+            return    
 
             # Si viene desde /soy_movil ya tenemos chat_id
             if reg.get("chat_id"):
