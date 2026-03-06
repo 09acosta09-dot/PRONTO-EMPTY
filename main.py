@@ -188,17 +188,19 @@ def haversine_distance(lat1, lon1, lat2, lon2):
 # MENÚS
 # ----------------------------
 start_keyboard = ReplyKeyboardMarkup(
-    [[KeyboardButton("🚀 Iniciar")]],
+    [
+        [KeyboardButton(text="🚀 Iniciar")]
+    ],
     resize_keyboard=True
 )
 
 main_keyboard = ReplyKeyboardMarkup(
     [
-        [KeyboardButton("Usuario")],
-        [KeyboardButton("Móvil")],
-        [KeyboardButton("Administrador")],
+        [KeyboardButton(text="Usuario")],
+        [KeyboardButton(text="Móvil")],
+        [KeyboardButton(text="Administrador")]
     ],
-    resize_keyboard=True,
+    resize_keyboard=True
 )
 
 user_service_keyboard = ReplyKeyboardMarkup(
