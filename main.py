@@ -1057,11 +1057,16 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if admin_step == "reg_modelo":
             context.user_data["reg_movil"]["modelo"] = text
-            reg = context.user_data.get("reg_movil", {})
-            # continuar registro
-            if reg.get("chat_id"):
-                try:
-                    chat_id_movil = int(reg["chat_id"])
+
+            # Pedir chat_id del conductor
+            context.user_data["admin_step"] = "reg_chatid"
+
+            await update.message.reply_text(
+                "📲 Ahora escribe el *chat ID* del conductor:",
+                parse_mode="Markdown"
+            )
+            return
+
                 except ValueError:
                     await update.message.reply_text("Error interno con el chat_id del móvil.")
                     context.user_data["admin_step"] = None
