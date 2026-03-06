@@ -242,9 +242,15 @@ admin_keyboard = ReplyKeyboardMarkup(
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
+
+    keyboard = ReplyKeyboardMarkup(
+        [[KeyboardButton("🚀 Iniciar")]],
+        resize_keyboard=True
+    )
+
     await update.message.reply_text(
         "👋 Bienvenido a PRONTO.\n\nToca el botón para iniciar:",
-        reply_markup=start_keyboard,
+        reply_markup=keyboard
     )
 
 
