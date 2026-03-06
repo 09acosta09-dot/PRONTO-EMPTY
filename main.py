@@ -1066,7 +1066,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="Markdown"
             )
             return
-
                 except ValueError:
                     await update.message.reply_text("Error interno con el chat_id del móvil.")
                     context.user_data["admin_step"] = None
