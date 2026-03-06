@@ -241,7 +241,6 @@ admin_keyboard = ReplyKeyboardMarkup(
 # ----------------------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.clear()
 
     keyboard = ReplyKeyboardMarkup(
         [[KeyboardButton("🚀 Iniciar")]],
@@ -249,10 +248,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await update.message.reply_text(
-        "👋 Bienvenido a PRONTO.\n\nToca el botón para iniciar:",
+        "PRUEBA BOT",
         reply_markup=keyboard
     )
-
 
 # ----------------------------
 # /soy_movil - solicitud de registro del conductor
