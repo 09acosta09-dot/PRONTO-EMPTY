@@ -1094,15 +1094,15 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode="Markdown"
                 )
                 return
+            else:
+                # Si NO existe chat_id, entonces sí lo pedimos
+                context.user_data["admin_step"] = "reg_chatid"
 
-    # Si NO existe chat_id, entonces sí lo pedimos
-    context.user_data["admin_step"] = "reg_chatid"
-
-    await update.message.reply_text(
-        "📲 Ahora escribe el *chat ID* del conductor:",
-        parse_mode="Markdown"
-    )
-    return
+                await update.message.reply_text(
+                    "📲 Ahora escribe el *chat ID* del conductor:",
+                    parse_mode="Markdown"
+                )
+                return
 
         if admin_step == "eliminar_movil":
             
