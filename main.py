@@ -1058,13 +1058,51 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if admin_step == "reg_modelo":
             context.user_data["reg_movil"]["modelo"] = text
 
-            context.user_data["admin_step"] = "reg_chatid"
+            reg = context.user_data.get("reg_movil", {})
 
-            await update.message.reply_text(
-                "📲 Ahora escribe el *chat ID* del conductor:",
-                parse_mode="Markdown"
-            )
-            return
+            # Si ya tenemos chat_id (vino de /soy_movil)
+            if reg.get("chat_id"):
+                chat_id_movil = reg["chat_id"]
+
+                servicio = reg.get("servicio")
+                codigo = asignar_codigo_movil(servicio)
+
+                mobiles = get_mobiles()
+
+                mobiles[str(chat_id_movil)] = {
+                    "codigo": codigo,
+                    "servicio": servicio,
+                    "lat": None,
+                    "lon": None,
+                    "activo": False,
+                    "nombre": reg.get("nombre", ""),
+                    "cedula": reg.get("cedula", ""),
+                    "placa": reg.get("placa", ""),
+                    "marca": reg.get("marca", ""),
+                    "modelo": reg.get("modelo", ""),
+                    "pago_aprobado": False,
+                }
+
+                save_mobiles(mobiles)
+
+                context.user_data["admin_step"] = None
+                context.user_data["reg_movil"] = {}
+
+                await update.message.reply_text(
+                    f"✅ Móvil registrado correctamente.\n\n"
+                    f"Código asignado: *{codigo}*",
+                    parse_mode="Markdown"
+                )
+                return
+
+    # Si NO existe chat_id, entonces sí lo pedimos
+    context.user_data["admin_step"] = "reg_chatid"
+
+    await update.message.reply_text(
+        "📲 Ahora escribe el *chat ID* del conductor:",
+        parse_mode="Markdown"
+    )
+    return
 
         if admin_step == "eliminar_movil":
             
