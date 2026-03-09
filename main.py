@@ -1058,7 +1058,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if admin_step == "reg_modelo":
             context.user_data["reg_movil"]["modelo"] = text
 
-            # Pedir chat_id del conductor
             context.user_data["admin_step"] = "reg_chatid"
 
             await update.message.reply_text(
@@ -1093,56 +1092,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             context.user_data.pop("admin_step", None)
             return    
-
-            # Si viene desde /soy_movil ya tenemos chat_id
-            if reg.get("chat_id"):
-                try:
-                    chat_id_movil = int(reg["chat_id"])
-                except ValueError:
-                    await update.message.reply_text("Error interno con el chat_id del móvil. Intenta de nuevo.")
-                    context.user_data["admin_step"] = None
-                    return
-
-                servicio = reg.get("servicio")
-                if not servicio:
-                    await update.message.reply_text("Error interno: servicio no definido. Intenta de nuevo.")
-                    context.user_data["admin_step"] = None
-                    return
-
-                codigo = asignar_codigo_movil(servicio)
-                mobiles = get_mobiles()
-                mobiles[str(chat_id_movil)] = {
-                    "codigo": codigo,
-                    "servicio": servicio,
-                    "lat": None,
-                    "lon": None,
-                    "activo": False,
-                    "nombre": reg.get("nombre", ""),
-                    "cedula": reg.get("cedula", ""),
-                    "placa": reg.get("placa", ""),
-                    "marca": reg.get("marca", ""),
-                    "modelo": reg.get("modelo", ""),
-                    "pago_aprobado": False,
-                }
-                save_mobiles(mobiles)
-
-                context.user_data["admin_step"] = None
-                context.user_data["reg_movil"] = {}
-
-                await update.message.reply_text(
-                    f"✅ Móvil registrado correctamente.\n\n"
-                    f"Conductor: *{mobiles[str(chat_id_movil)]['nombre']}*\n"
-                    f"Servicio: *{servicio}*\n"
-                    f"Código asignado: *{codigo}*\n\n"
-                    "El conductor debe entrar al bot, elegir 'Móvil' y autenticarse con este código.",
-                    parse_mode="Markdown",
-                )
-                return
-
-            # Si no vino de /soy_movil pedimos chat_id manual
-            context.user_data["admin_step"] = "reg_chatid"
-            await update.message.reply_text("📲 Ahora escribe el *chat ID* del conductor:", parse_mode="Markdown")
-            return
 
         if admin_step == "reg_chatid":
             reg = context.user_data.get("reg_movil", {})
