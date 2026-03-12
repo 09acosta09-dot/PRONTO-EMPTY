@@ -759,11 +759,22 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             save_services(services)
 
-            # reenviar al canal
-            canal = servicio.get("canal")
+            # determinar canal según tipo de servicio
+            servicio_tipo = servicio.get("servicio")
+
+            if servicio_tipo == "domicilios":
+                canal = CHANNEL_DOMICILIOS_ID
+            elif servicio_tipo == "servicio especial":
+                canal = CHANNEL_SERVICIO_ESPECIAL_ID
+            elif servicio_tipo == "camionetas":
+                canal = CHANNEL_CAMIONETAS_ID
+            elif servicio_tipo == "motocarro":
+                canal = CHANNEL_MOTOCARRO_ID
+            else:
+                canal = None
 
             mensaje = (
-                f"🚨 *SERVICIO DISPONIBLE NUEVAMENTE*\n\n"
+                f"♻️ *SERVICIO LIBERADO*\n\n"
                 f"📍 Origen: {servicio.get('origen','')}\n"
                 f"📍 Destino: {servicio.get('destino','')}\n"
                 f"👤 Cliente: {servicio.get('nombre','')}\n\n"
@@ -771,11 +782,13 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"Motivo: {motivo}"
             )
 
-            await context.bot.send_message(
-                chat_id=canal,
-                text=mensaje,
-                parse_mode="Markdown"
-            )
+            if canal:
+
+                await context.bot.send_message(
+                    chat_id=canal,
+                    text=mensaje,
+                    parse_mode="Markdown"
+                )
 
         del context.user_data["cancelando_servicio"]
 
