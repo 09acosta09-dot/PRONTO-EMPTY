@@ -739,48 +739,51 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Cancelación pendiente
     if "cancelando_servicio" in context.user_data:
-        servicio_id = context.user_data["cancelando_servicio"]
-        motivo = text
 
-        services = get_services()
-        servicio = services.get(servicio_id)
+    service_id = context.user_data["cancelando_servicio"]
+    motivo = update.message.text
 
-        if servicio:
+    services = get_services()
 
-            movil_id = update.effective_user.id
-            canal_id = servicio.get("canal_id")
+    if service_id in services:
 
-            # Notificar cliente
-            await context.bot.send_message(
-                chat_id=servicio["cliente_id"],
-                text=f"❌ Tu servicio fue cancelado por el móvil.\n\nMotivo:\n{motivo}"
-            )
+        servicio = services[service_id]
 
-            # Notificar admin
-            await context.bot.send_message(
-                chat_id=ADMIN_ID,
-                text=f"🚨 Servicio #{servicio_id} CANCELADO por móvil {movil_id}.\nMotivo: {motivo}"
-            )
+        # guardar motivo
+        servicio["motivo_cancelacion"] = motivo
+        servicio["cancelado_por"] = "movil"
 
-            # 🔁 LIBERAR SERVICIO
-            servicio["movil_id"] = None
-            servicio["estado"] = "pendiente"
+        # liberar servicio
+        servicio["status"] = "pendiente"
+        servicio["movil_codigo"] = None
 
-            save_services(servicios_activos)
+        save_services(services)
 
-            # 🔔 REENVIAR AL CANAL
-            if canal_id:
-                await context.bot.send_message(
-                    chat_id=canal_id,
-                    text=f"🔁 Servicio #{servicio_id} disponible nuevamente.\n"
-                         f"📍 {servicio.get('direccion','')}\n"
-                         f"👤 Cliente: {servicio.get('cliente_nombre','')}"
-                )
+        # reenviar al canal
+        canal = servicio.get("canal")
 
-        del context.user_data["cancelando_servicio"]
+        mensaje = (
+            f"🚨 *SERVICIO DISPONIBLE NUEVAMENTE*\n\n"
+            f"📍 Origen: {servicio.get('origen','')}\n"
+            f"📍 Destino: {servicio.get('destino','')}\n"
+            f"👤 Cliente: {servicio.get('nombre','')}\n\n"
+            f"⚠️ El móvil canceló este servicio.\n"
+            f"Motivo: {motivo}"
+        )
 
-        await update.message.reply_text("✅ Servicio cancelado y liberado correctamente.")
-        return
+        await context.bot.send_message(
+            chat_id=canal,
+            text=mensaje,
+            parse_mode="Markdown"
+        )
+
+    del context.user_data["cancelando_servicio"]
+
+    await update.message.reply_text(
+        "✅ Cancelación registrada. El servicio volvió a estar disponible."
+    )
+
+    return
         # Volver al inicio desde cualquier flujo
         if text == "⬅ Volver al inicio":
             context.user_data.clear()
