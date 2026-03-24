@@ -89,7 +89,7 @@ CORTE  = time(15, 0)  # 3:00 p.m.
 
 # Información de servicios (prefix se usa para generar códigos como D001, SE002, etc.)
 SERVICE_INFO = {
-    "Servicio Especial": {
+    "Servicio Especial (Taxi Blanco)": {
         "label_user": "🚕 Servicio Especial (Taxi Blanco)",
         "channel_id": CHANNEL_SERVICIO_ESPECIAL,
         "link": LINK_SERVICIO_ESPECIAL,
