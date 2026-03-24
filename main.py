@@ -323,7 +323,7 @@ def build_main_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [
             [KeyboardButton("👤 Cliente")],
-            [KeyboardButton("🚗 Operador")],
+            [KeyboardButton("🚗 Movil")],
         ],
         resize_keyboard=True,
     )
