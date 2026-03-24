@@ -89,8 +89,8 @@ CORTE  = time(15, 0)  # 3:00 p.m.
 
 # Información de servicios (prefix se usa para generar códigos como D001, SE002, etc.)
 SERVICE_INFO = {
-    "Servicio Especial (Taxi Blanco)": {
-        "label_user": "🚕 Servicio Especial (Taxi Blanco)",
+    "Taxi Servicio Especial": {
+        "label_user": "🚕 Taxi Servicio Especial",
         "channel_id": CHANNEL_SERVICIO_ESPECIAL,
         "link": LINK_SERVICIO_ESPECIAL,
         "prefix": "SE",
@@ -352,7 +352,7 @@ def build_user_service_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [
             [KeyboardButton(SERVICE_INFO["Camionetas"]["label_user"])],
-            [KeyboardButton(SERVICE_INFO["Servicio Especial (Taxi Blanco)"]["label_user"])],
+            [KeyboardButton(SERVICE_INFO["Taxi Servicio Especial"]["label_user"])],
             [KeyboardButton(SERVICE_INFO["Motocarro"]["label_user"])],
             [KeyboardButton(SERVICE_INFO["Domicilios"]["label_user"])],
             [KeyboardButton("⬅ Volver al inicio")],
