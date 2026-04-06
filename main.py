@@ -1525,6 +1525,19 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ============================================================
 # 13. MAIN
 # ============================================================
+async def cmd_exportar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        return
+    try:
+        with open(MOBILES_FILE, "r", encoding="utf-8") as f:
+            contenido = f.read()
+        await update.message.reply_document(
+            document=contenido.encode("utf-8"),
+            filename="mobiles_backup.json",
+            caption="✅ Backup de móviles registrados"
+        )
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error: {e}")
 
 def main():
     application = (
@@ -1537,6 +1550,7 @@ def main():
     application.add_handler(CommandHandler("start",     start))
     application.add_handler(CommandHandler("admin",     cmd_admin))
     application.add_handler(CommandHandler("soy_movil", soy_movil_command))
+    application.add_handler(CommandHandler("exportar", cmd_exportar))
 
     application.add_handler(CallbackQueryHandler(button_callback))
     application.add_handler(MessageHandler(filters.LOCATION, location_handler))
