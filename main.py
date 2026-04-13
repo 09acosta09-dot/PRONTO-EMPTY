@@ -507,8 +507,7 @@ def build_movil_keyboard() -> ReplyKeyboardMarkup:
 def build_location_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [
-            [KeyboardButton("📍 Enviar ubicación", request_location=True)],
-            [KeyboardButton("Omitir ubicación")],
+            [KeyboardButton("📍 Compartir ubicación GPS (opcional)", request_location=True)],
             [KeyboardButton("⬅ Volver al inicio")],
         ],
         resize_keyboard=True,
@@ -1538,17 +1537,28 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if step == "ask_phone":
             context.user_data["data"]["telefono"] = text
-            context.user_data["step"] = "ask_location"
+            context.user_data["step"] = "ask_location_gps"
             await update.message.reply_text(
-                "📍 Comparte tu ubicación GPS con el botón o escribe tu dirección actual:",
+                "📍 Si deseas, comparte tu *ubicación GPS* para mayor precisión (es opcional).\n\n"
+                "Usa el botón de abajo o simplemente escribe tu *dirección* en el siguiente paso.",
+                parse_mode="Markdown",
                 reply_markup=build_location_keyboard(),
             )
             return
 
-        if step == "ask_location":
-            context.user_data["data"]["direccion_texto"] = text
+        if step == "ask_location_gps":
+            # El cliente escribió texto en vez de compartir GPS — lo ignoramos y pedimos dirección
             context.user_data["data"]["lat"] = None
             context.user_data["data"]["lon"] = None
+            context.user_data["step"] = "ask_location_text"
+            await update.message.reply_text(
+                "📝 Escribe tu *dirección de recogida* (barrio, calle, punto de referencia):",
+                parse_mode="Markdown",
+            )
+            return
+
+        if step == "ask_location_text":
+            context.user_data["data"]["direccion_texto"] = text
             context.user_data["step"] = "ask_destination"
             await update.message.reply_text(
                 "📍 Ahora escribe el *destino* a donde necesitas ir o enviar:",
@@ -1593,13 +1603,13 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     step        = context.user_data.get("step")
 
     # Cliente compartiendo su ubicación de origen
-    if mode == "usuario" and step == "ask_location":
-        context.user_data["data"]["lat"]             = loc.latitude
-        context.user_data["data"]["lon"]             = loc.longitude
-        context.user_data["data"]["direccion_texto"] = None
-        context.user_data["step"]                    = "ask_destination"
+    if mode == "usuario" and step in ("ask_location_gps", "ask_location"):
+        context.user_data["data"]["lat"]  = loc.latitude
+        context.user_data["data"]["lon"]  = loc.longitude
+        context.user_data["step"]         = "ask_location_text"
         await update.message.reply_text(
-            "✅ Ubicación recibida.\n\nAhora escribe el *destino* a donde necesitas ir:",
+            "✅ Ubicación GPS recibida.\n\n"
+            "📝 Ahora escribe tu *dirección de recogida* (barrio, calle, punto de referencia):",
             parse_mode="Markdown",
         )
         return
