@@ -1,17 +1,21 @@
 """
 Bot PRONTO - Sistema de domicilios y servicios para Telegram
 =============================================================
-v2.0 - Refactorizado con claves internas para servicios.
-Arquitectura modular en un solo archivo para Railway.
-
-CAMBIOS PRINCIPALES v2.0:
-  - SERVICIOS: estructura centralizada con clave interna (ej: "taxi", "domicilios").
-    El sistema trabaja internamente con claves, nunca con nombres visibles.
-  - SERVICE_INFO eliminado y reemplazado por SERVICIOS + helpers.
-  - NOMBRE_A_CLAVE: mapa de compatibilidad para registros antiguos en JSON.
-  - Registro de móviles: guarda la clave interna, no el nombre visible.
-  - Cancelación: notifica al admin + redistribuye al canal correcto.
-  - Comparaciones de servicio: siempre via clave interna.
+Arquitectura modular en un solo archivo para facilitar despliegue en Railway.
+Secciones:
+  1. IMPORTS
+  2. CONFIGURACIÓN
+  3. SEGURIDAD / ROLES  ← CRÍTICO: control de acceso admin
+  4. UTILIDADES (archivo, tiempo, distancia)
+  5. TECLADOS / MENÚS
+  6. HANDLERS - /start y /soy_movil
+  7. HANDLERS - USUARIO (flujo de solicitud)
+  8. HANDLERS - MÓVIL (jornada)
+  9. HANDLERS - ADMINISTRADOR (panel protegido)
+ 10. HANDLER - CALLBACKS (inline buttons)
+ 11. HANDLER - TEXTO (router principal)
+ 12. HANDLER - UBICACIÓN
+ 13. MAIN
 """
 
 # ============================================================
@@ -45,120 +49,31 @@ from telegram.ext import (
 # 2. CONFIGURACIÓN
 # ============================================================
 
+# Token del bot (variable de entorno en Railway)
 TOKEN = os.getenv("TU_TOKEN_NUEVO")
 if not TOKEN:
     raise RuntimeError("La variable de entorno TU_TOKEN_NUEVO no está configurada.")
 
-# ─── ESTRUCTURA CENTRALIZADA DE SERVICIOS ────────────────────
-#
-# REGLA DE ORO:
-#   - Todo el código interno usa la CLAVE (ej: "taxi", "domicilios").
-#   - "nombre" es SOLO para mostrar al usuario en pantalla.
-#   - Si renombras un servicio, cambia solo "nombre" aquí. El resto no se toca.
-#
-# ─────────────────────────────────────────────────────────────
-SERVICIOS = {
-    "taxi": {
-        "nombre":  "Taxi Servicio Especial",
-        "emoji":   "🚕",
-        "canal_id": -1002697357566,
-        "link":    "https://t.me/+Drczf-TdHCUzNDZh",
-        "prefijo": "SE",
-    },
-    "domicilios": {
-        "nombre":  "Domicilios",
-        "emoji":   "📦",
-        "canal_id": -1002503403579,
-        "link":    "https://t.me/+gZvnu8zolb1iOTBh",
-        "prefijo": "D",
-    },
-    "camionetas": {
-        "nombre":  "Camionetas",
-        "emoji":   "🚚",
-        "canal_id": -1002662309590,
-        "link":    "https://t.me/+KRam-XSvPQ5jNjRh",
-        "prefijo": "C",
-    },
-    "motocarro": {
-        "nombre":  "Motocarros",
-        "emoji":   "🛺",
-        "canal_id": -1002688723492,
-        "link":    "https://t.me/+REkbglMlfxE3YjI5",
-        "prefijo": "M",
-    },
-}
+# IDs de canales por tipo de servicio
+CHANNEL_SERVICIO_ESPECIAL = -1002697357566
+CHANNEL_DOMICILIOS        = -1002503403579
+CHANNEL_CAMIONETAS        = -1002662309590
+CHANNEL_MOTOCARRO         = -1002688723492
 
-# Mapa de compatibilidad: nombres viejos/variantes → clave interna
-# Útil si hay registros antiguos en el JSON con el nombre visible guardado.
-NOMBRE_A_CLAVE = {
-    # Nombres anteriores del sistema
-    "Taxi Servicio Especial": "taxi",
-    "Servicio Especial":      "taxi",
-    "taxi":                   "taxi",
-    "Taxi":                   "taxi",
-    "Domicilios":             "domicilios",
-    "domicilios":             "domicilios",
-    "Camionetas":             "camionetas",
-    "camionetas":             "camionetas",
-    "Motocarro":              "motocarro",
-    "Motocarros":             "motocarro",
-    "motocarro":              "motocarro",
-}
-
-
-def normalizar_servicio(valor: str) -> str | None:
-    """
-    Convierte cualquier nombre o clave de servicio a la clave interna estándar.
-    Retorna None si no se reconoce.
-    Permite cambiar nombres sin romper el sistema.
-    """
-    if valor in SERVICIOS:
-        return valor
-    return NOMBRE_A_CLAVE.get(valor)
-
-
-def get_nombre(clave: str) -> str:
-    """Retorna el nombre visible de un servicio dado su clave interna."""
-    srv = SERVICIOS.get(clave)
-    if not srv:
-        return clave
-    return f"{srv['emoji']} {srv['nombre']}"
-
-
-def get_nombre_corto(clave: str) -> str:
-    """Retorna solo el nombre (sin emoji) de un servicio dado su clave."""
-    srv = SERVICIOS.get(clave)
-    if not srv:
-        return clave
-    return srv["nombre"]
-
-
-def get_canal(clave: str) -> int | None:
-    """Retorna el canal_id de un servicio dado su clave interna."""
-    srv = SERVICIOS.get(clave)
-    return srv["canal_id"] if srv else None
-
-
-def get_link(clave: str) -> str | None:
-    """Retorna el link de invitación de un servicio dado su clave interna."""
-    srv = SERVICIOS.get(clave)
-    return srv.get("link") if srv else None
-
-
-def get_prefijo(clave: str) -> str:
-    """Retorna el prefijo de código de un servicio (ej: 'SE', 'D')."""
-    srv = SERVICIOS.get(clave)
-    return srv["prefijo"] if srv else "X"
-
-
-# Canal de backups
+# Canal de backups (variable de entorno)
 BACKUP_CHANNEL_ID = int(os.getenv("BACKUP_CHANNEL_ID", "0"))
 
-# Nequi
+# Links de invitación a los canales
+LINK_SERVICIO_ESPECIAL = "https://t.me/+Drczf-TdHCUzNDZh"
+LINK_DOMICILIOS        = "https://t.me/+gZvnu8zolb1iOTBh"
+LINK_CAMIONETAS        = "https://t.me/+KRam-XSvPQ5jNjRh"
+LINK_MOTOCARRO         = "https://t.me/+REkbglMlfxE3YjI5"
+
+# Número Nequi para pagos
 NEQUI_NUMBER = "3052915231"
 
-# Directorio de datos
-DATA_DIR      = "/data"
+# Directorio de datos persistentes
+DATA_DIR = "/data"
 os.makedirs(DATA_DIR, exist_ok=True)
 MOBILES_FILE  = os.path.join(DATA_DIR, "mobiles.json")
 SERVICES_FILE = os.path.join(DATA_DIR, "services.json")
@@ -169,21 +84,65 @@ WEBHOOK_PATH   = f"/webhook/{TOKEN}"
 WEBHOOK_URL    = WEBHOOK_DOMAIN + WEBHOOK_PATH
 
 # Zona horaria Colombia
-TZ_CO = ZoneInfo("America/Bogota")
-CORTE = time(15, 0)  # 3:00 p.m.
+TZ_CO  = ZoneInfo("America/Bogota")
+CORTE  = time(15, 0)  # 3:00 p.m.
+
+# Información de servicios (prefix se usa para generar códigos como D001, SE002, etc.)
+SERVICE_INFO = {
+    "Servicio Especial": {
+        "label_user": "🚕 Servicio Especial",
+        "channel_id": CHANNEL_SERVICIO_ESPECIAL,
+        "link": LINK_SERVICIO_ESPECIAL,
+        "prefix": "SE",
+    },
+    "Domicilios": {
+        "label_user": "📦 Domicilios",
+        "channel_id": CHANNEL_DOMICILIOS,
+        "link": LINK_DOMICILIOS,
+        "prefix": "D",
+    },
+    "Camionetas": {
+        "label_user": "🚚 Camionetas",
+        "channel_id": CHANNEL_CAMIONETAS,
+        "link": LINK_CAMIONETAS,
+        "prefix": "C",
+    },
+    "Motocarro": {
+        "label_user": "🛺 Motocarro",
+        "channel_id": CHANNEL_MOTOCARRO,
+        "link": LINK_MOTOCARRO,
+        "prefix": "M",
+    },
+}
 
 # ============================================================
 # 3. SEGURIDAD / ROLES
 # ============================================================
+#
+# CÓMO FUNCIONA:
+# - ADMIN_IDS: lista de user_id de Telegram autorizados como administradores.
+#   Para encontrar tu user_id habla con @userinfobot en Telegram.
+# - is_admin(): función que valida si un user_id tiene rol de administrador.
+# - require_admin(): decorador / guard que se llama ANTES de ejecutar cualquier
+#   lógica de administrador. Si el usuario no está en ADMIN_IDS, bloquea y
+#   redirige al menú principal. Se aplica en TODOS los puntos de entrada admin.
+#
+# IMPORTANTE: agregar aquí los IDs de los admins reales de PRONTO.
+# ============================================================
 
-ADMIN_IDS = [1741298723, 7076796229]  # ← user_id de los admins
+ADMIN_IDS = [1741298723, 7076796229]  # ← pon aquí los user_id de los admins
 
 
 def is_admin(user_id: int) -> bool:
+    """Retorna True si el user_id tiene rol de administrador."""
     return user_id in ADMIN_IDS
 
 
 async def deny_admin_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Bloquea el acceso y redirige al menú principal.
+    Se llama desde cualquier punto donde se detecte acceso no autorizado al panel admin.
+    """
     context.user_data.clear()
     await update.message.reply_text(
         "🚫 No tienes permisos para acceder a este menú.\n\n"
@@ -199,6 +158,7 @@ async def deny_admin_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --- Archivo ---
 
 def load_json(path: str, default):
+    """Carga un archivo JSON. Retorna `default` si no existe o hay error."""
     if not os.path.exists(path):
         return default
     try:
@@ -209,6 +169,7 @@ def load_json(path: str, default):
 
 
 def save_json(path: str, data):
+    """Guarda datos como JSON con indentación legible."""
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
@@ -232,6 +193,7 @@ def save_services(data: dict):
 
 
 async def backup_file(context, filename: str):
+    """Envía un archivo de datos al canal de backup como documento."""
     if not BACKUP_CHANNEL_ID:
         return
     try:
@@ -256,10 +218,16 @@ def now_colombia_str() -> str:
 
 
 def after_cutoff() -> bool:
+    """Retorna True si la hora actual es >= 3:00 p.m. en Colombia."""
     return now_colombia().time() >= CORTE
 
 
 def mobile_can_work(mobile: dict) -> tuple[bool, str]:
+    """
+    Verifica si un móvil puede recibir servicios según la hora y estado de pago.
+    Antes de las 3:00 p.m.: puede trabajar sin pago aprobado.
+    Desde las 3:00 p.m.: requiere pago_aprobado = True.
+    """
     if after_cutoff() and not mobile.get("pago_aprobado", False):
         return False, (
             "Ya pasó la hora de corte (3:00 p.m.).\n"
@@ -272,6 +240,7 @@ def mobile_can_work(mobile: dict) -> tuple[bool, str]:
 # --- Distancia ---
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calcula la distancia en km entre dos coordenadas GPS usando la fórmula de Haversine."""
     R = 6371.0
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
     dphi    = math.radians(lat2 - lat1)
@@ -280,10 +249,11 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
-def seleccionar_movil_mas_cercano(clave_servicio: str, lat_cliente, lon_cliente) -> dict | None:
+def seleccionar_movil_mas_cercano(servicio: str, lat_cliente, lon_cliente) -> dict | None:
     """
-    Busca el móvil activo disponible más cercano al cliente para la clave de servicio dada.
-    Trabaja siempre con claves internas. Los registros antiguos son normalizados al vuelo.
+    Busca el móvil activo y disponible más cercano al cliente para el servicio indicado.
+    Si no hay coordenadas, asigna distancia infinita (se toma igual si no hay otro candidato).
+    Retorna None si no hay candidatos.
     """
     mobiles    = get_mobiles()
     candidatos = []
@@ -291,12 +261,8 @@ def seleccionar_movil_mas_cercano(clave_servicio: str, lat_cliente, lon_cliente)
     for chat_id_str, m in mobiles.items():
         if not m.get("activo"):
             continue
-
-        # Normalizar el servicio guardado en el registro (compatibilidad con datos viejos)
-        clave_movil = normalizar_servicio(m.get("servicio", ""))
-        if clave_movil != clave_servicio:
+        if m.get("servicio") != servicio:
             continue
-
         puede, _ = mobile_can_work(m)
         if not puede:
             continue
@@ -304,7 +270,7 @@ def seleccionar_movil_mas_cercano(clave_servicio: str, lat_cliente, lon_cliente)
         m_lat = m.get("lat")
         m_lon = m.get("lon")
 
-        if all(x is not None for x in [m_lat, m_lon, lat_cliente, lon_cliente]):
+        if m_lat is not None and m_lon is not None and lat_cliente is not None and lon_cliente is not None:
             dist = haversine_distance(lat_cliente, lon_cliente, m_lat, m_lon)
         else:
             dist = float("inf")
@@ -312,7 +278,7 @@ def seleccionar_movil_mas_cercano(clave_servicio: str, lat_cliente, lon_cliente)
         candidatos.append({
             "chat_id":  int(chat_id_str),
             "codigo":   m.get("codigo"),
-            "servicio": clave_servicio,  # siempre clave interna
+            "servicio": servicio,
             "distancia": dist,
         })
 
@@ -325,23 +291,20 @@ def seleccionar_movil_mas_cercano(clave_servicio: str, lat_cliente, lon_cliente)
     return random.choice(empatados)
 
 
-def asignar_codigo_movil(clave_servicio: str) -> str:
-    """
-    Genera el siguiente código correlativo para un móvil (ej: D003, SE007).
-    Trabaja con la clave interna del servicio.
-    """
+def asignar_codigo_movil(servicio: str) -> str:
+    """Genera el siguiente código correlativo para un móvil (ej: D003, SE007)."""
     mobiles = get_mobiles()
-    prefijo = get_prefijo(clave_servicio)
+    prefix  = SERVICE_INFO[servicio]["prefix"]
     numeros = []
     for m in mobiles.values():
         codigo = m.get("codigo", "")
-        if codigo.startswith(prefijo):
+        if codigo.startswith(prefix):
             try:
-                numeros.append(int(codigo[len(prefijo):]))
+                numeros.append(int(codigo[len(prefix):]))
             except ValueError:
                 continue
     next_num = max(numeros) + 1 if numeros else 1
-    return f"{prefijo}{next_num:03d}"
+    return f"{prefix}{next_num:03d}"
 
 
 # ============================================================
@@ -353,16 +316,24 @@ def build_start_keyboard() -> ReplyKeyboardMarkup:
 
 
 def build_main_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Menú principal público. NO incluye opción de Administrador.
+    El acceso al panel admin solo es por comando /admin (solo admins ven la opción).
+    """
     return ReplyKeyboardMarkup(
         [
             [KeyboardButton("👤 Cliente")],
-            [KeyboardButton("🚗 Movil")],
+            [KeyboardButton("🚗 Operador")],
         ],
         resize_keyboard=True,
     )
 
 
 def build_admin_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Teclado del panel de administración.
+    Solo se muestra a usuarios validados como admin (is_admin() = True).
+    """
     return ReplyKeyboardMarkup(
         [
             [KeyboardButton("📲 Registrar móvil")],
@@ -378,15 +349,16 @@ def build_admin_keyboard() -> ReplyKeyboardMarkup:
 
 
 def build_user_service_keyboard() -> ReplyKeyboardMarkup:
-    """
-    Construye el menú de servicios para el cliente dinámicamente desde SERVICIOS.
-    Si se cambia un nombre en SERVICIOS, el menú se actualiza solo.
-    """
-    botones = []
-    for clave, info in SERVICIOS.items():
-        botones.append([KeyboardButton(f"{info['emoji']} {info['nombre']}")])
-    botones.append([KeyboardButton("⬅ Volver al inicio")])
-    return ReplyKeyboardMarkup(botones, resize_keyboard=True)
+    return ReplyKeyboardMarkup(
+        [
+            [KeyboardButton(SERVICE_INFO["Camionetas"]["label_user"])],
+            [KeyboardButton(SERVICE_INFO["Servicio Especial"]["label_user"])],
+            [KeyboardButton(SERVICE_INFO["Motocarro"]["label_user"])],
+            [KeyboardButton(SERVICE_INFO["Domicilios"]["label_user"])],
+            [KeyboardButton("⬅ Volver al inicio")],
+        ],
+        resize_keyboard=True,
+    )
 
 
 def build_movil_keyboard() -> ReplyKeyboardMarkup:
@@ -414,35 +386,42 @@ def build_location_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
-def build_registro_servicio_keyboard() -> ReplyKeyboardMarkup:
-    """
-    Teclado para que el admin elija el servicio al registrar un móvil.
-    Generado dinámicamente desde SERVICIOS para que siempre esté sincronizado.
-    """
-    botones = []
-    for clave, info in SERVICIOS.items():
-        botones.append([KeyboardButton(f"{info['emoji']} {info['nombre']}")])
-    return ReplyKeyboardMarkup(botones, resize_keyboard=True, one_time_keyboard=True)
-
-
 # ============================================================
 # 6. HANDLERS - /start y /soy_movil
 # ============================================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Comando /start. Limpia el estado y muestra el menú de bienvenida.
+    Pregunta si el usuario es Cliente u Operador.
+    El menú de Administrador NO aparece aquí.
+    """
     context.user_data.clear()
     await update.message.reply_text(
-        "👋 Bienvenido a *PRONTO*\n\n¿Cómo deseas continuar?",
+        "👋 Bienvenido a *PRONTO*\n\n"
+        "¿Cómo deseas continuar?",
         parse_mode="Markdown",
         reply_markup=build_main_keyboard(),
     )
 
 
 async def cmd_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Comando /admin — ÚNICO punto de entrada al panel de administración.
+    
+    SEGURIDAD:
+    - Valida is_admin() antes de hacer CUALQUIER cosa.
+    - Si no es admin, niega el acceso y redirige.
+    - Los usuarios regulares ni siquiera saben que este comando existe
+      (no aparece en ningún menú público).
+    """
     user_id = update.effective_user.id
+
+    # ── GUARD: validación de rol ──────────────────────────────
     if not is_admin(user_id):
         await deny_admin_access(update, context)
         return
+    # ─────────────────────────────────────────────────────────
 
     context.user_data.clear()
     context.user_data["mode"]       = "admin"
@@ -455,6 +434,10 @@ async def cmd_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def soy_movil_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Comando /soy_movil — el conductor lo usa para solicitar registro.
+    Notifica a todos los admins con botón para iniciar el registro.
+    """
     user    = update.effective_user
     chat_id = update.effective_chat.id
 
@@ -494,6 +477,7 @@ async def soy_movil_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ============================================================
 
 async def handle_cliente_option(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Inicia el flujo de solicitud de servicio para el cliente."""
     context.user_data["mode"] = "usuario"
     context.user_data["step"] = "choose_service"
     await update.message.reply_text(
@@ -502,14 +486,12 @@ async def handle_cliente_option(update: Update, context: ContextTypes.DEFAULT_TY
     )
 
 
-async def handle_usuario_service_choice(update: Update, context: ContextTypes.DEFAULT_TYPE, clave_servicio: str):
-    """
-    El cliente eligió un servicio. Guarda la CLAVE INTERNA, no el nombre.
-    """
-    context.user_data["mode"]     = "usuario"
-    context.user_data["step"]     = "ask_name"
-    context.user_data["servicio"] = clave_servicio  # ← siempre clave interna
-    context.user_data["data"]     = {}
+async def handle_usuario_service_choice(update: Update, context: ContextTypes.DEFAULT_TYPE, servicio: str):
+    """El cliente eligió un tipo de servicio. Comienza a recolectar datos."""
+    context.user_data["mode"]    = "usuario"
+    context.user_data["step"]    = "ask_name"
+    context.user_data["servicio"] = servicio
+    context.user_data["data"]    = {}
     await update.message.reply_text(
         "📝 Por favor escribe tu *nombre completo*:",
         parse_mode="Markdown",
@@ -519,32 +501,26 @@ async def handle_usuario_service_choice(update: Update, context: ContextTypes.DE
 async def finalize_user_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Completa la solicitud del usuario:
-    - Genera ID de servicio único.
-    - Busca el móvil más cercano usando clave interna.
-    - Notifica al móvil y publica en el canal correspondiente.
+    - Genera un ID de servicio único.
+    - Busca el móvil más cercano disponible.
+    - Notifica al móvil y al canal correspondiente.
     """
     user    = update.effective_user
     chat_id = update.effective_chat.id
     data    = context.user_data.get("data", {})
-    clave_servicio = context.user_data.get("servicio")  # clave interna
+    servicio = context.user_data.get("servicio")
 
-    if not clave_servicio or clave_servicio not in SERVICIOS:
-        await update.message.reply_text("Ocurrió un problema con el servicio. Intenta de nuevo.")
-        return
-
-    if not data:
+    if not servicio or not data:
         await update.message.reply_text("Ocurrió un problema. Intenta de nuevo.")
         return
 
-    hora         = now_colombia_str()
-    nombre_srv   = get_nombre_corto(clave_servicio)
-
-    data["hora"]         = hora
-    data["servicio"]     = clave_servicio      # ← clave interna en el registro
+    hora             = now_colombia_str()
+    data["hora"]     = hora
+    data["servicio"] = servicio
     data["user_chat_id"] = chat_id
-    data["user_id"]      = user.id
+    data["user_id"]  = user.id
 
-    # Generar ID único de servicio
+    # Generar ID único de servicio (S00001, S00002...)
     services = get_services()
     nums = []
     for sid in services:
@@ -555,13 +531,13 @@ async def finalize_user_request(update: Update, context: ContextTypes.DEFAULT_TY
                 pass
     service_id = f"S{(max(nums) + 1 if nums else 1):05d}"
 
-    data["id"]            = service_id
-    data["status"]        = "pendiente"
-    data["movil_codigo"]  = None
-    data["movil_chat_id"] = None
+    data["id"]             = service_id
+    data["status"]         = "pendiente"
+    data["movil_codigo"]   = None
+    data["movil_chat_id"]  = None
 
-    # Buscar móvil más cercano (con clave interna)
-    movil_info = seleccionar_movil_mas_cercano(clave_servicio, data.get("lat"), data.get("lon"))
+    # Buscar móvil más cercano
+    movil_info = seleccionar_movil_mas_cercano(servicio, data.get("lat"), data.get("lon"))
     if movil_info is None:
         await update.message.reply_text(
             "😔 En este momento no hay móviles disponibles para este servicio.\n"
@@ -569,8 +545,9 @@ async def finalize_user_request(update: Update, context: ContextTypes.DEFAULT_TY
         )
         return
 
-    movil_chat_id = movil_info["chat_id"]
-    movil_codigo  = movil_info["codigo"]
+    movil_chat_id  = movil_info["chat_id"]
+    movil_codigo   = movil_info["codigo"]
+    movil_servicio = movil_info["servicio"]
 
     data["movil_codigo"]  = movil_codigo
     data["movil_chat_id"] = movil_chat_id
@@ -583,15 +560,18 @@ async def finalize_user_request(update: Update, context: ContextTypes.DEFAULT_TY
     )
 
     # Mensaje al móvil
-    texto_movil  = f"🚨 *Nuevo servicio de {nombre_srv}*\n\n"
+    texto_movil  = f"🚨 *Nuevo servicio de {movil_servicio}*\n\n"
     texto_movil += f"🆔 Código de servicio: *{service_id}*\n"
     texto_movil += f"👤 Cliente: *{data.get('nombre', '(sin nombre)')}*\n"
     texto_movil += f"📞 Teléfono cliente: *{data.get('telefono', '(sin teléfono)')}*\n"
+    texto_movil += f"🏠 Dirección de recogida: *{data.get('direccion_texto', '(no indicada)')}*\n"
     texto_movil += f"📍 Destino: *{data.get('destino', '(sin destino)')}*\n"
-    if clave_servicio == "camionetas":
+    if movil_servicio == "Camionetas":
         texto_movil += f"📦 Tipo de carga: *{data.get('carga', '(no especificada)')}*\n"
     if data.get("lat") is not None and data.get("lon") is not None:
-        texto_movil += "\n🌎 El cliente compartió ubicación GPS.\n"
+        lat = data["lat"]
+        lon = data["lon"]
+        texto_movil += f"\n🌎 Ubicación GPS del cliente:\nhttps://maps.google.com/?q={lat},{lon}\n"
     texto_movil += f"\n⏰ Hora: *{hora}* (Colombia)\n\nPresiona el botón para tomar el servicio."
 
     keyboard = InlineKeyboardMarkup(
@@ -609,10 +589,10 @@ async def finalize_user_request(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text("Problema al notificar al móvil. Intenta de nuevo.")
         return
 
-    # Publicar resumen en el canal del servicio
-    canal_id = get_canal(clave_servicio)
+    # Resumen al canal del servicio
+    channel_id = SERVICE_INFO[movil_servicio]["channel_id"]
     resumen_canal = (
-        f"📢 *Nuevo servicio de {nombre_srv}*\n"
+        f"📢 *Nuevo servicio de {movil_servicio}*\n"
         f"🆔 Servicio: *{service_id}*\n"
         f"👤 Cliente: *{data.get('nombre','')}*\n"
         f"📞 Tel: *{data.get('telefono','')}*\n"
@@ -620,11 +600,10 @@ async def finalize_user_request(update: Update, context: ContextTypes.DEFAULT_TY
         f"🕒 Hora: *{hora}* (Colombia)\n"
         f"🚗 Móvil asignado: *{movil_codigo}* (en espera de reserva)"
     )
-    if canal_id:
-        try:
-            await context.bot.send_message(chat_id=canal_id, text=resumen_canal, parse_mode="Markdown")
-        except Exception:
-            pass
+    try:
+        await context.bot.send_message(chat_id=channel_id, text=resumen_canal, parse_mode="Markdown")
+    except Exception:
+        pass
 
     context.user_data.clear()
 
@@ -634,6 +613,7 @@ async def finalize_user_request(update: Update, context: ContextTypes.DEFAULT_TY
 # ============================================================
 
 async def handle_operador_option(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Inicia el flujo de autenticación para el operador/móvil."""
     context.user_data.clear()
     context.user_data["mode"]       = "movil_auth"
     context.user_data["movil_step"] = "ask_code"
@@ -644,6 +624,7 @@ async def handle_operador_option(update: Update, context: ContextTypes.DEFAULT_T
 
 
 async def handle_movil_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+    """Maneja las acciones del menú del móvil una vez autenticado."""
     user_id_str = str(update.effective_user.id)
     mobiles     = get_mobiles()
     m           = mobiles.get(user_id_str)
@@ -656,9 +637,8 @@ async def handle_movil_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         context.user_data.clear()
         return
 
-    codigo         = m.get("codigo", "SIN-CODIGO")
-    clave_servicio = normalizar_servicio(m.get("servicio", ""))  # normalizar por si es registro viejo
-    nombre_srv     = get_nombre_corto(clave_servicio) if clave_servicio else "Desconocido"
+    codigo   = m.get("codigo", "SIN-CODIGO")
+    servicio = m.get("servicio", "Desconocido")
 
     if text == "🚀 Iniciar jornada":
         puede, msg = mobile_can_work(m)
@@ -666,15 +646,12 @@ async def handle_movil_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             await update.message.reply_text("⛔ " + msg, reply_markup=build_movil_keyboard())
             return
         m["activo"] = True
-        # Actualizar clave normalizada en el registro si era nombre viejo
-        if clave_servicio:
-            m["servicio"] = clave_servicio
         mobiles[user_id_str] = m
         save_mobiles(mobiles)
-        link    = get_link(clave_servicio) if clave_servicio else None
-        mensaje = f"✅ Jornada iniciada para el móvil *{codigo}* ({nombre_srv}).\n\n"
+        link    = SERVICE_INFO.get(servicio, {}).get("link")
+        mensaje = f"✅ Jornada iniciada para el móvil *{codigo}* ({servicio}).\n\n"
         if link:
-            mensaje += f"Para ver servicios de *{nombre_srv}*, entra al canal:\n{link}"
+            mensaje += f"Para ver servicios de *{servicio}*, entra al canal:\n{link}"
         else:
             mensaje += "El administrador te indicará el canal de servicios."
         await update.message.reply_text(mensaje, parse_mode="Markdown", reply_markup=build_movil_keyboard())
@@ -717,12 +694,22 @@ async def handle_movil_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 # ============================================================
 
 async def handle_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+    """
+    Maneja todas las acciones del panel de administración.
+    
+    SEGURIDAD:
+    Esta función SIEMPRE verifica is_admin() antes de procesar cualquier acción.
+    Aunque el mode="admin" esté guardado en user_data, se re-valida el user_id
+    en cada llamada para evitar que alguien manipule el estado de la sesión.
+    """
     user_id    = update.effective_user.id
     admin_step = context.user_data.get("admin_step")
 
+    # ── GUARD: doble validación en cada acción admin ──────────
     if not is_admin(user_id):
         await deny_admin_access(update, context)
         return
+    # ─────────────────────────────────────────────────────────
 
     # --- Registrar móvil ---
     if text == "📲 Registrar móvil":
@@ -742,13 +729,11 @@ async def handle_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             return
         lines = ["📋 *Móviles registrados:*\n"]
         for m in mobiles.values():
-            activo  = "✅ Activo" if m.get("activo") else "⛔ Inactivo"
-            pago    = "💰 Pago OK" if m.get("pago_aprobado") else "💸 Pendiente"
-            clave   = normalizar_servicio(m.get("servicio", "")) or m.get("servicio", "?")
-            nombre  = get_nombre_corto(clave) if clave in SERVICIOS else clave
+            activo = "✅ Activo" if m.get("activo") else "⛔ Inactivo"
+            pago   = "💰 Pago OK" if m.get("pago_aprobado") else "💸 Pendiente"
             lines.append(
                 f"• {m.get('codigo','?')} – {m.get('nombre','Sin nombre')} "
-                f"– {nombre} – {activo} – {pago}"
+                f"– {m.get('servicio','?')} – {activo} – {pago}"
             )
         await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
         return
@@ -793,10 +778,8 @@ async def handle_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, 
             return
         lines = ["📋 *Servicios activos:*\n"]
         for s in activos:
-            clave   = normalizar_servicio(s.get("servicio", "")) or s.get("servicio", "?")
-            nombre  = get_nombre_corto(clave) if clave in SERVICIOS else clave
             lines.append(
-                f"• {s.get('id','')} – {nombre} – {s.get('nombre','')} "
+                f"• {s.get('id','')} – {s.get('servicio','')} – {s.get('nombre','')} "
                 f"– Destino: {s.get('destino','')} – Estado: {s.get('status','')} "
                 f"– Móvil: {s.get('movil_codigo','Sin móvil')}"
             )
@@ -814,26 +797,22 @@ async def handle_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     if admin_step == "reg_cedula":
         context.user_data["reg_movil"]["cedula"] = text
         context.user_data["admin_step"] = "reg_service"
-
-        # Construir lista de servicios disponibles desde SERVICIOS (no hardcodeada)
-        opciones = "\n".join(f"  • {info['emoji']} {info['nombre']}" for info in SERVICIOS.values())
         await update.message.reply_text(
-            f"🚗 Indica el *tipo de servicio*:\n{opciones}\n\n"
+            "🚗 Indica el *tipo de servicio*:\n"
+            "- Servicio Especial\n- Domicilios\n- Camionetas\n- Motocarro\n\n"
             "Escríbelo exactamente como aparece arriba.",
             parse_mode="Markdown",
         )
         return
 
     if admin_step == "reg_service":
-        clave_ingresada = normalizar_servicio(text.strip())
-        if not clave_ingresada:
-            opciones = ", ".join(info["nombre"] for info in SERVICIOS.values())
+        servicio_ingresado = text.strip()
+        if servicio_ingresado not in SERVICE_INFO:
             await update.message.reply_text(
-                f"❌ Servicio no válido. Opciones disponibles:\n{opciones}"
+                "❌ Servicio no válido. Escribe: Servicio Especial, Domicilios, Camionetas o Motocarro."
             )
             return
-        # Guardar la CLAVE INTERNA, nunca el nombre visible
-        context.user_data["reg_movil"]["servicio"] = clave_ingresada
+        context.user_data["reg_movil"]["servicio"] = servicio_ingresado
         context.user_data["admin_step"] = "reg_placa"
         await update.message.reply_text("🚘 Escribe la *placa* del vehículo:", parse_mode="Markdown")
         return
@@ -855,8 +834,10 @@ async def handle_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         reg = context.user_data.get("reg_movil", {})
 
         if reg.get("chat_id"):
+            # Chat ID conocido (vino desde botón /soy_movil)
             await _finalizar_registro_movil(update, context, reg, int(reg["chat_id"]))
         else:
+            # Pedir el chat ID manualmente
             context.user_data["admin_step"] = "reg_chatid"
             await update.message.reply_text(
                 "📲 Escribe el *chat ID* del conductor:",
@@ -912,7 +893,7 @@ async def handle_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     if admin_step == "approve_payment_code":
         codigo  = text.strip().upper()
         mobiles = get_mobiles()
-        target      = None
+        target  = None
         target_data = None
         for cid, m in mobiles.items():
             if m.get("codigo", "").upper() == codigo:
@@ -925,14 +906,12 @@ async def handle_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
         context.user_data["pending_payment_code"] = codigo
         pago  = "💰 Pago OK" if target_data.get("pago_aprobado") else "💸 Pendiente"
-        clave = normalizar_servicio(target_data.get("servicio", "")) or "?"
-        nombre_srv = get_nombre_corto(clave) if clave in SERVICIOS else clave
         texto = (
             "📋 *Información del móvil:*\n\n"
             f"🔢 Código: *{codigo}*\n"
             f"👤 Nombre: *{target_data.get('nombre','?')}*\n"
             f"🧾 Cédula: *{target_data.get('cedula','?')}*\n"
-            f"🚗 Servicio: *{nombre_srv}*\n"
+            f"🚗 Servicio: *{target_data.get('servicio','?')}*\n"
             f"🚘 Placa: *{target_data.get('placa','?')}*\n"
             f"🚘 Marca: *{target_data.get('marca','?')}*\n"
             f"🚘 Modelo: *{target_data.get('modelo','?')}*\n"
@@ -946,6 +925,7 @@ async def handle_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await update.message.reply_text(texto, parse_mode="Markdown", reply_markup=keyboard)
         return
 
+    # Fallback
     await update.message.reply_text("Usa las opciones del menú de administrador.", reply_markup=build_admin_keyboard())
 
 
@@ -955,25 +935,18 @@ async def _finalizar_registro_movil(
     reg: dict,
     chat_id_movil: int,
 ):
-    """
-    Guarda el registro completo del móvil.
-    Siempre guarda la CLAVE INTERNA del servicio (nunca el nombre visible).
-    """
-    clave_servicio = reg.get("servicio")  # ya viene como clave interna desde reg_service
-
-    # Validación extra: si por algún motivo vino como nombre, normalizamos
-    clave_servicio = normalizar_servicio(clave_servicio) if clave_servicio else None
-
-    if not clave_servicio:
+    """Guarda el registro completo del móvil y notifica al admin."""
+    servicio = reg.get("servicio")
+    if not servicio:
         await update.message.reply_text("❌ Error interno: servicio no definido. Intenta de nuevo.")
         context.user_data["admin_step"] = None
         return
 
-    codigo  = asignar_codigo_movil(clave_servicio)
+    codigo  = asignar_codigo_movil(servicio)
     mobiles = get_mobiles()
     mobiles[str(chat_id_movil)] = {
         "codigo":        codigo,
-        "servicio":      clave_servicio,   # ← SIEMPRE clave interna
+        "servicio":      servicio,
         "lat":           None,
         "lon":           None,
         "activo":        False,
@@ -989,11 +962,10 @@ async def _finalizar_registro_movil(
     context.user_data["admin_step"] = None
     context.user_data["reg_movil"]  = {}
 
-    nombre_srv = get_nombre_corto(clave_servicio)
     await update.message.reply_text(
         f"✅ Móvil registrado correctamente.\n\n"
         f"Conductor: *{reg.get('nombre', '')}*\n"
-        f"Servicio: *{nombre_srv}*\n"
+        f"Servicio: *{servicio}*\n"
         f"Código asignado: *{codigo}*\n\n"
         "El conductor debe entrar al bot, elegir '🚗 Operador' y autenticarse con este código.",
         parse_mode="Markdown",
@@ -1005,6 +977,13 @@ async def _finalizar_registro_movil(
 # ============================================================
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Maneja todos los callbacks de botones inline.
+    
+    SEGURIDAD en callbacks admin (REG_MOVIL, APROBAR_PAGO, CANCELAR_PAGO):
+    - Se re-valida is_admin() antes de ejecutar cualquier acción privilegiada.
+    - Así se evita que alguien reenvíe un mensaje con botón admin y lo ejecute.
+    """
     query   = update.callback_query
     await query.answer()
     data    = query.data
@@ -1019,7 +998,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ── SERVICIO COMPLETADO ───────────────────────────────────
     if data.startswith("servicio_completado_"):
-        service_id = data.split("_", 3)[2]
+        service_id = data.split("_")[2]
         services   = get_services()
         if service_id in services:
             services[service_id]["status"] = "completado"
@@ -1040,10 +1019,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ── RESERVAR SERVICIO (móvil) ─────────────────────────────
     if data.startswith("RESERVAR|"):
-        service_id    = data.split("|", 1)[1]
-        movil_chat_id = query.message.chat.id
-        mobiles       = get_mobiles()
-        mobile        = mobiles.get(str(movil_chat_id))
+        service_id     = data.split("|", 1)[1]
+        movil_chat_id  = query.message.chat.id
+        mobiles        = get_mobiles()
+        mobile         = mobiles.get(str(movil_chat_id))
 
         if mobile:
             puede, msg = mobile_can_work(mobile)
@@ -1056,7 +1035,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-        services      = get_services()
+        services     = get_services()
         servicio_data = services.get(service_id)
         if not servicio_data:
             await query.edit_message_text("Este servicio ya no está disponible o ha sido eliminado.")
@@ -1073,17 +1052,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         services[service_id]          = servicio_data
         save_services(services)
 
-        movil_codigo   = servicio_data.get("movil_codigo")
-        clave_servicio = normalizar_servicio(servicio_data.get("servicio", "")) or ""
-        nombre_srv     = get_nombre_corto(clave_servicio) if clave_servicio else "?"
-
+        movil_codigo = servicio_data.get("movil_codigo")
         texto_reserva  = (
             f"✅ Has *reservado* el servicio {service_id}.\n\n"
             f"👤 {servicio_data.get('nombre', '')}\n"
             f"📞 Teléfono: *{servicio_data.get('telefono', '')}*\n"
             f"📍 Destino: {servicio_data.get('destino', '')}\n"
         )
-        if clave_servicio == "camionetas":
+        if servicio_data.get("servicio") == "Camionetas":
             texto_reserva += f"📦 Carga: {servicio_data.get('carga', '')}\n"
         texto_reserva += f"\n⏰ Hora reserva: {servicio_data.get('hora_reserva', '')} (Colombia)"
 
@@ -1109,8 +1085,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
 
-        # Publicar en canal
-        canal_id = get_canal(clave_servicio)
+        # Resumen al canal
+        servicio_tipo = servicio_data.get("servicio")
+        channel_id    = SERVICE_INFO[servicio_tipo]["channel_id"]
         resumen = (
             f"✅ *Servicio reservado*\n"
             f"🆔 Servicio: *{service_id}*\n"
@@ -1120,23 +1097,22 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📍 Destino: *{servicio_data.get('destino','')}*\n"
             f"⏰ Hora reserva: *{servicio_data.get('hora_reserva','')}* (Colombia)"
         )
-        if canal_id:
-            try:
-                await bot.send_message(chat_id=canal_id, text=resumen, parse_mode="Markdown")
-            except Exception:
-                pass
+        try:
+            await bot.send_message(chat_id=channel_id, text=resumen, parse_mode="Markdown")
+        except Exception:
+            pass
         return
 
     # ── CANCELAR SERVICIO (móvil solicita cancelación) ────────
     if data.startswith("cancelar_servicio_"):
-        parts      = data.split("_")
-        service_id = parts[-1]
+        service_id = data.split("_")[2]
         context.user_data["cancelando_servicio"] = service_id
         await query.edit_message_text("✍️ Escribe el motivo de la cancelación:")
         return
 
     # ── APROBAR PAGO (solo admin) ──────────────────────────────
     if data.startswith("APROBAR_PAGO|"):
+        # Guard: solo admins pueden aprobar pagos aunque el botón llegue a otro usuario
         if not is_admin(user_id):
             await query.edit_message_text("🚫 No tienes permisos para esta acción.")
             return
@@ -1182,6 +1158,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ── INICIO DE REGISTRO DE MÓVIL (solo admin) ─────────────
     if data.startswith("REG_MOVIL|"):
+        # Guard: solo admins pueden iniciar un registro desde el botón de notificación
         if not is_admin(user_id):
             await query.edit_message_text("🚫 No tienes permisos para esta acción.")
             return
@@ -1202,6 +1179,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ============================================================
 
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Router principal de mensajes de texto.
+    Orden de evaluación:
+      1. Acciones globales (Volver al inicio, Iniciar)
+      2. Cancelación de servicio pendiente (móvil)
+      3. Selección de rol (Cliente / Operador)
+      4. Flujo según mode guardado en user_data
+    """
     if not update.message:
         return
 
@@ -1229,97 +1214,25 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         services   = get_services()
 
         if service_id in services:
-            servicio_data = services[service_id]
-
-            # Normalizar clave del servicio (compatibilidad con registros viejos)
-            clave_servicio = normalizar_servicio(servicio_data.get("servicio", ""))
-            canal_id       = get_canal(clave_servicio) if clave_servicio else None
-            nombre_srv     = get_nombre_corto(clave_servicio) if clave_servicio else "?"
-            movil_cancelador = servicio_data.get("movil_codigo", "desconocido")
-
-            # Resetear estado del servicio a pendiente
-            servicio_data["motivo_cancelacion"] = motivo
-            servicio_data["cancelado_por"]      = "movil"
-            servicio_data["status"]             = "pendiente"
-            servicio_data["movil_codigo"]       = None
-            servicio_data["movil_chat_id"]      = None
+            servicio = services[service_id]
+            servicio["motivo_cancelacion"] = motivo
+            servicio["cancelado_por"]      = "movil"
+            servicio["status"]             = "pendiente"
+            servicio["movil_codigo"]       = None
             save_services(services)
 
-            # 1) Notificar a todos los admins
-            texto_admin = (
-                f"⚠️ *Cancelación de servicio*\n\n"
-                f"🆔 Servicio: *{service_id}*\n"
-                f"🚗 Móvil que canceló: *{movil_cancelador}*\n"
-                f"📍 Destino: {servicio_data.get('destino','')}\n"
-                f"👤 Cliente: {servicio_data.get('nombre','')}\n"
-                f"❌ Motivo: {motivo}\n\n"
-                "El servicio fue vuelto a estado *disponible* y republicado en el canal."
+            servicio_tipo = servicio.get("servicio")
+            channel_id    = SERVICE_INFO.get(servicio_tipo, {}).get("channel_id")
+            mensaje = (
+                f"♻️ *SERVICIO LIBERADO*\n\n"
+                f"📍 Destino: {servicio.get('destino','')}\n"
+                f"👤 Cliente: {servicio.get('nombre','')}\n\n"
+                f"⚠️ El móvil canceló este servicio.\n"
+                f"Motivo: {motivo}"
             )
-            for admin_id in ADMIN_IDS:
+            if channel_id:
                 try:
-                    await context.bot.send_message(
-                        chat_id=admin_id,
-                        text=texto_admin,
-                        parse_mode="Markdown",
-                    )
-                except Exception:
-                    pass
-
-            # 2) Republicar en el canal como servicio disponible nuevamente
-            hora_actual = now_colombia_str()
-            texto_canal = (
-                f"🚨 *SERVICIO DISPONIBLE NUEVAMENTE* 🚨\n\n"
-                f"🆔 Servicio: *{service_id}*\n"
-                f"🚗 Tipo: *{nombre_srv}*\n"
-                f"👤 Cliente: {servicio_data.get('nombre','')}\n"
-                f"📞 Tel: {servicio_data.get('telefono','')}\n"
-                f"📍 Destino: {servicio_data.get('destino','')}\n"
-                f"🕒 Hora: *{hora_actual}* (Colombia)\n\n"
-                "⚠️ El móvil anterior canceló. Este servicio necesita un nuevo operador."
-            )
-            if canal_id:
-                try:
-                    await context.bot.send_message(
-                        chat_id=canal_id,
-                        text=texto_canal,
-                        parse_mode="Markdown",
-                    )
-                except Exception:
-                    pass
-
-            # 3) Intentar reasignar automáticamente a otro móvil
-            lat_cliente = servicio_data.get("lat")
-            lon_cliente = servicio_data.get("lon")
-            nuevo_movil = seleccionar_movil_mas_cercano(clave_servicio, lat_cliente, lon_cliente) if clave_servicio else None
-
-            if nuevo_movil:
-                nuevo_chat_id = nuevo_movil["chat_id"]
-                nuevo_codigo  = nuevo_movil["codigo"]
-                servicio_data["movil_codigo"]  = nuevo_codigo
-                servicio_data["movil_chat_id"] = nuevo_chat_id
-                servicio_data["status"]        = "pendiente"
-                save_services(services)
-
-                hora_reasig = now_colombia_str()
-                texto_movil  = f"🚨 *Nuevo servicio de {nombre_srv}*\n\n"
-                texto_movil += f"🆔 Código de servicio: *{service_id}*\n"
-                texto_movil += f"👤 Cliente: *{servicio_data.get('nombre', '(sin nombre)')}*\n"
-                texto_movil += f"📞 Teléfono cliente: *{servicio_data.get('telefono', '(sin teléfono)')}*\n"
-                texto_movil += f"📍 Destino: *{servicio_data.get('destino', '(sin destino)')}*\n"
-                if clave_servicio == "camionetas":
-                    texto_movil += f"📦 Tipo de carga: *{servicio_data.get('carga', '(no especificada)')}*\n"
-                texto_movil += f"\n⏰ Hora: *{hora_reasig}* (Colombia)\n\nPresiona el botón para tomar el servicio."
-
-                keyboard = InlineKeyboardMarkup(
-                    [[InlineKeyboardButton("🚨🔴 RESERVAR SERVICIO 🔴🚨", callback_data=f"RESERVAR|{service_id}")]]
-                )
-                try:
-                    await context.bot.send_message(
-                        chat_id=nuevo_chat_id,
-                        text=texto_movil,
-                        reply_markup=keyboard,
-                        parse_mode="Markdown",
-                    )
+                    await context.bot.send_message(chat_id=channel_id, text=mensaje, parse_mode="Markdown")
                 except Exception:
                     pass
 
@@ -1335,7 +1248,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_cliente_option(update, context)
         return
 
-    if text in ("🚗 Movil", "🚗 Operador"):
+    if text == "🚗 Operador":
         await handle_operador_option(update, context)
         return
 
@@ -1377,20 +1290,12 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-            # Normalizar servicio en el registro al autenticar
-            clave = normalizar_servicio(m.get("servicio", ""))
-            if clave and m.get("servicio") != clave:
-                m["servicio"] = clave
-                mobiles[user_id_str] = m
-                save_mobiles(mobiles)
-
             context.user_data["mode"]           = "movil"
             context.user_data["movil_codigo"]   = codigo_real
-            context.user_data["movil_servicio"] = clave or m.get("servicio", "")
+            context.user_data["movil_servicio"] = m.get("servicio", "Desconocido")
 
-            nombre_srv = get_nombre_corto(clave) if clave else m.get("servicio", "")
             await update.message.reply_text(
-                f"✅ Bienvenido, móvil *{codigo_real}* ({nombre_srv}).\n\nUsa el menú:",
+                f"✅ Bienvenido, móvil *{codigo_real}* ({m.get('servicio','')}).\n\nUsa el menú:",
                 parse_mode="Markdown",
                 reply_markup=build_movil_keyboard(),
             )
@@ -1402,6 +1307,10 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # --- Panel de administración ---
+    #
+    # SEGURIDAD: aunque el mode="admin" esté en user_data,
+    # handle_admin_menu() re-valida is_admin() antes de ejecutar cualquier acción.
+    # Esto previene que alguien manipule su propio user_data para acceder al panel.
     if mode == "admin":
         await handle_admin_menu(update, context, text)
         return
@@ -1411,20 +1320,14 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         step = context.user_data.get("step")
 
         if step == "choose_service":
-            # Detectar servicio por texto del botón usando SERVICIOS dinámicamente
-            clave_encontrada = None
-            for clave, info in SERVICIOS.items():
-                label = f"{info['emoji']} {info['nombre']}"
-                if text == label:
-                    clave_encontrada = clave
-                    break
-            if clave_encontrada:
-                await handle_usuario_service_choice(update, context, clave_encontrada)
-            else:
-                await update.message.reply_text(
-                    "Por favor selecciona una opción del menú.",
-                    reply_markup=build_user_service_keyboard(),
-                )
+            for servicio, info in SERVICE_INFO.items():
+                if text == info["label_user"]:
+                    await handle_usuario_service_choice(update, context, servicio)
+                    return
+            await update.message.reply_text(
+                "Por favor selecciona una opción del menú.",
+                reply_markup=build_user_service_keyboard(),
+            )
             return
 
         if step == "ask_name":
@@ -1435,28 +1338,40 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if step == "ask_phone":
             context.user_data["data"]["telefono"] = text
-            context.user_data["step"] = "ask_location"
+            context.user_data["step"] = "ask_address"
             await update.message.reply_text(
-                "📍 Comparte tu ubicación GPS con el botón o escribe tu dirección actual:",
+                "📍 Escribe tu *dirección de recogida* (barrio, calle, referencia):",
+                parse_mode="Markdown",
+            )
+            return
+
+        if step == "ask_address":
+            # Guardamos la dirección escrita por el cliente (siempre obligatoria)
+            context.user_data["data"]["direccion_texto"] = text
+            context.user_data["data"]["lat"] = None
+            context.user_data["data"]["lon"] = None
+            context.user_data["step"] = "ask_location_gps"
+            await update.message.reply_text(
+                "📡 Ahora comparte tu *ubicación GPS* para que el móvil llegue más rápido.\n\n"
+                "_(Puedes omitirla si no quieres compartirla)_",
+                parse_mode="Markdown",
                 reply_markup=build_location_keyboard(),
             )
             return
 
-        if step == "ask_location":
-            context.user_data["data"]["direccion_texto"] = text
-            context.user_data["data"]["lat"] = None
-            context.user_data["data"]["lon"] = None
+        if step == "ask_location_gps":
+            # El cliente escribió texto en vez de compartir GPS — lo tomamos como omisión
             context.user_data["step"] = "ask_destination"
             await update.message.reply_text(
-                "📍 Ahora escribe el *destino* a donde necesitas ir o enviar:",
+                "📍 Escribe el *destino* a donde necesitas ir o enviar:",
                 parse_mode="Markdown",
             )
             return
 
         if step == "ask_destination":
             context.user_data["data"]["destino"] = text
-            clave_servicio = context.user_data.get("servicio")
-            if clave_servicio == "camionetas":
+            servicio = context.user_data.get("servicio")
+            if servicio == "Camionetas":
                 context.user_data["step"] = "ask_carga"
                 await update.message.reply_text(
                     "📦 ¿Qué tipo de carga necesitas transportar?\n(Ej: muebles, electrodomésticos, trasteo, etc.)"
@@ -1481,6 +1396,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ============================================================
 
 async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Procesa ubicaciones GPS compartidas por clientes y móviles."""
     if not update.message or not update.message.location:
         return
 
@@ -1489,24 +1405,24 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mode        = context.user_data.get("mode")
     step        = context.user_data.get("step")
 
-    # Cliente compartiendo su ubicación de origen
-    if mode == "usuario" and step == "ask_location":
-        context.user_data["data"]["lat"]             = loc.latitude
-        context.user_data["data"]["lon"]             = loc.longitude
-        context.user_data["data"]["direccion_texto"] = None
-        context.user_data["step"]                    = "ask_destination"
+    # Cliente compartiendo su ubicación GPS (paso opcional, después de escribir la dirección)
+    if mode == "usuario" and step == "ask_location_gps":
+        context.user_data["data"]["lat"] = loc.latitude
+        context.user_data["data"]["lon"] = loc.longitude
+        context.user_data["step"]        = "ask_destination"
         await update.message.reply_text(
-            "✅ Ubicación recibida.\n\nAhora escribe el *destino* a donde necesitas ir:",
+            "✅ Ubicación GPS recibida.\n\n"
+            "📍 Ahora escribe el *destino* a donde necesitas ir o enviar:",
             parse_mode="Markdown",
         )
         return
 
-    # Móvil actualizando su ubicación
+    # Móvil actualizando su ubicación en tiempo real
     mobiles = get_mobiles()
     if user_id_str in mobiles:
-        m        = mobiles[user_id_str]
-        m["lat"] = loc.latitude
-        m["lon"] = loc.longitude
+        m         = mobiles[user_id_str]
+        m["lat"]  = loc.latitude
+        m["lon"]  = loc.longitude
         mobiles[user_id_str] = m
         save_mobiles(mobiles)
         await update.message.reply_text(
@@ -1525,19 +1441,6 @@ async def location_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ============================================================
 # 13. MAIN
 # ============================================================
-async def cmd_exportar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id):
-        return
-    try:
-        with open(MOBILES_FILE, "r", encoding="utf-8") as f:
-            contenido = f.read()
-        await update.message.reply_document(
-            document=contenido.encode("utf-8"),
-            filename="mobiles_backup.json",
-            caption="✅ Backup de móviles registrados"
-        )
-    except Exception as e:
-        await update.message.reply_text(f"❌ Error: {e}")
 
 def main():
     application = (
@@ -1547,16 +1450,21 @@ def main():
         .build()
     )
 
+    # Comandos
     application.add_handler(CommandHandler("start",     start))
-    application.add_handler(CommandHandler("admin",     cmd_admin))
+    application.add_handler(CommandHandler("admin",     cmd_admin))    # ← panel admin (solo admins)
     application.add_handler(CommandHandler("soy_movil", soy_movil_command))
-    application.add_handler(CommandHandler("exportar", cmd_exportar))
 
+    # Callbacks de botones inline
     application.add_handler(CallbackQueryHandler(button_callback))
+
+    # Mensajes de ubicación GPS
     application.add_handler(MessageHandler(filters.LOCATION, location_handler))
+
+    # Mensajes de texto
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
-    print("✅ Bot PRONTO v2.0 iniciado correctamente.")
+    print("✅ Bot PRONTO iniciado correctamente.")
     application.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
 
 
